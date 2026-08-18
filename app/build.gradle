@@ -58,7 +58,7 @@ android {
     }
 
     androidResources {
-        noCompress 'onnx', 'bin', 'f32le'
+        noCompress += ['onnx', 'bin', 'f32le']
     }
 
     externalNativeBuild {
