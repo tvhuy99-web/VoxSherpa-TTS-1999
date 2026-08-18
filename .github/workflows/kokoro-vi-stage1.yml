@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: kokoro-vi-stage1-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-stage1:
     runs-on: ubuntu-latest
@@ -63,6 +67,29 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
+
+      - name: Verify Stage-1 APK native linkage and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          rm -rf "$RUNNER_TEMP/apk-check"
+          mkdir -p "$RUNNER_TEMP/apk-check"
+          unzip -q "$APK" 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so' -d "$RUNNER_TEMP/apk-check"
+          NEEDED=$(readelf -d "$RUNNER_TEMP/apk-check/lib/arm64-v8a/libvoxsherpa_kokoro_vi.so")
+          echo "$NEEDED"
+          if echo "$NEEDED" | grep -F '/home/runner/' ; then
+            echo 'ERROR: Native library contains an absolute GitHub runner dependency path.' >&2
+            exit 1
+          fi
+          echo "$NEEDED" | grep -F 'Shared library: [libsea_g2p_android.so]'
+          echo "$NEEDED" | grep -F 'Shared library: [libonnxruntime.so]'
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/kokoro_vi.onnx'
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/sea_g2p.bin'
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/voicepacks/diem_trinh.f32le'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libsea_g2p_android.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so'
 
       - name: Upload Stage-1 APK
         uses: actions/upload-artifact@v4
