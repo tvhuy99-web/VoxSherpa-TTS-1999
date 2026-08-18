@@ -2,6 +2,7 @@ package com.CodeBySonu.VoxSherpa.system;
 
 import android.content.Context;
 import android.content.pm.PackageInfo;
+import android.content.res.AssetFileDescriptor;
 import android.os.Build;
 import android.util.Log;
 
@@ -11,7 +12,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -128,14 +128,15 @@ public final class TtsDiagnostics {
     }
 
     private static void appendAsset(StringBuilder out, Context context, String path) {
-        try (InputStream input = context.getAssets().open(path)) {
-            long total = 0;
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = input.read(buffer)) > 0) total += read;
-            out.append("Asset ").append(path).append(": OK, ").append(total).append(" bytes\n");
+        try (AssetFileDescriptor afd = context.getAssets().openFd(path)) {
+            out.append("Asset ").append(path).append(": OK, ").append(afd.getLength()).append(" bytes\n");
         } catch (Throwable t) {
-            out.append("Asset ").append(path).append(": MISSING/ERROR, ").append(t).append('\n');
+            try {
+                context.getAssets().open(path).close();
+                out.append("Asset ").append(path).append(": OK, size unavailable\n");
+            } catch (Throwable missing) {
+                out.append("Asset ").append(path).append(": MISSING/ERROR, ").append(missing).append('\n');
+            }
         }
     }
 
