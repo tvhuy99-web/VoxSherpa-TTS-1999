@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.PopupMenu;
+import android.widget.TextView;
 
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnosticsActivity;
@@ -58,10 +59,19 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         group.put("voices", voices);
         groupedLanguageList.add(0, group);
 
+        int noModelId = getResources().getIdentifier("txt_no_model", "id", getPackageName());
+        if (noModelId != 0) {
+            TextView noModel = findViewById(noModelId);
+            if (noModel != null) noModel.setVisibility(View.GONE);
+        }
+
         int recyclerId = getResources().getIdentifier("recyclerview_voices", "id", getPackageName());
         if (recyclerId != 0) {
             androidx.recyclerview.widget.RecyclerView recycler = findViewById(recyclerId);
-            if (recycler != null && recycler.getAdapter() != null) recycler.getAdapter().notifyDataSetChanged();
+            if (recycler != null) {
+                recycler.setVisibility(View.VISIBLE);
+                if (recycler.getAdapter() != null) recycler.getAdapter().notifyDataSetChanged();
+            }
         }
         TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
                 "Added " + VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName + " to settings UI.");
