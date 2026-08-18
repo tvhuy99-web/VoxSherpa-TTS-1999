@@ -12,6 +12,7 @@ HF_REVISION="9f210d622209fcc216fe2ac6159fed2ff381cb8a"
 SEA_G2P_COMMIT="59001f6dc3ba729a4fb7c7d81f262b7447a68c21"
 ORT_VERSION="1.17.1"
 mkdir -p "$ASSET_DIR/voicepacks" "$JNI_DIR/arm64-v8a" "$JNI_DIR/x86_64" "$WORK_DIR"
+
 fetch() {
   local url="$1"; local output="$2"
   if [[ -s "$output" ]]; then echo "Already present: $output"; return; fi
@@ -19,6 +20,7 @@ fetch() {
   curl --fail --location --retry 4 --retry-delay 3 --connect-timeout 30 --output "$output.part" "$url"
   mv "$output.part" "$output"
 }
+
 MODEL="$ASSET_DIR/kokoro_vi.onnx"
 DICTIONARY="$ASSET_DIR/sea_g2p.bin"
 VOICE_PT="$WORK_DIR/diem_trinh.pt"
@@ -27,12 +29,14 @@ fetch "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/kokoro_vi.onnx?d
 fetch "https://raw.githubusercontent.com/pnnbao97/sea-g2p/${SEA_G2P_COMMIT}/python/sea_g2p/sea_g2p.bin" "$DICTIONARY"
 fetch "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/voicepacks/diem_trinh.pt?download=true" "$VOICE_PT"
 python3 "$ROOT/tools/kokoro_vi/convert_voicepack.py" "$VOICE_PT" "$VOICE_F32"
+
 model_size=$(wc -c < "$MODEL"); dict_size=$(wc -c < "$DICTIONARY")
 (( model_size >= 300000000 )) || { echo "kokoro_vi.onnx is unexpectedly small: $model_size" >&2; exit 1; }
 (( dict_size >= 50000000 )) || { echo "sea_g2p.bin is unexpectedly small: $dict_size" >&2; exit 1; }
 test -s "$ASSET_DIR/config.json"; test -s "$VOICE_F32"
 voice_size=$(wc -c < "$VOICE_F32")
 (( voice_size == 522240 )) || { echo "Unexpected voicepack size: $voice_size" >&2; exit 1; }
+
 ORT_ZIP="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.zip"
 ORT_EXTRACT="$WORK_DIR/onnxruntime-${ORT_VERSION}"
 fetch "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.zip" "$ORT_ZIP"
@@ -41,11 +45,44 @@ cp "$ORT_EXTRACT/jni/arm64-v8a/libonnxruntime.so" "$JNI_DIR/arm64-v8a/libonnxrun
 cp "$ORT_EXTRACT/jni/x86_64/libonnxruntime.so" "$JNI_DIR/x86_64/libonnxruntime.so"
 rm -rf "$CPP_DIR/onnxruntime_headers"; mkdir -p "$CPP_DIR/onnxruntime_headers"
 cp -R "$ORT_EXTRACT/headers/." "$CPP_DIR/onnxruntime_headers/"
+
 SEA_ARCHIVE="$WORK_DIR/sea-g2p-${SEA_G2P_COMMIT}.tar.gz"
 SEA_SOURCE="$WORK_DIR/sea-g2p-src"
 fetch "https://github.com/pnnbao97/sea-g2p/archive/${SEA_G2P_COMMIT}.tar.gz" "$SEA_ARCHIVE"
 rm -rf "$SEA_SOURCE"; mkdir -p "$SEA_SOURCE"
 tar -xzf "$SEA_ARCHIVE" --strip-components=1 -C "$SEA_SOURCE"
+
+# The upstream Rust crate also exposes Python bindings via pyo3. Android only
+# needs the native Rust core, so strip the Python-only annotations/signature
+# while preserving the exact Vietnamese normalization and G2P implementation.
+VI_MOD="$SEA_SOURCE/src/lang/vi/mod.rs"
+python3 - "$VI_MOD" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+text = text.replace("use pyo3::prelude::*;\n", "")
+text = re.sub(r"(?m)^\s*#\[(?:pyclass|pymethods|new)\]\s*\n", "", text)
+text = re.sub(r"(?m)^\s*#\[pyo3\([^\n]*\)\]\s*\n", "", text)
+text = text.replace(
+    "    pub fn normalize_batch(&self, py: Python<'_>, texts: Vec<String>, punc_norm: bool) -> PyResult<Vec<String>> {\n"
+    "        py.allow_threads(|| {\n"
+    "            use rayon::prelude::*;\n"
+    "            Ok(texts.into_par_iter().map(|t| self.normalize(&t, punc_norm)).collect())\n"
+    "        })\n"
+    "    }",
+    "    pub fn normalize_batch(&self, texts: Vec<String>, punc_norm: bool) -> Vec<String> {\n"
+    "        use rayon::prelude::*;\n"
+    "        texts.into_par_iter().map(|t| self.normalize(&t, punc_norm)).collect()\n"
+    "    }",
+)
+if "pyo3::" in text or "#[pyo3" in text or "Python<'_>" in text or "PyResult<" in text:
+    raise SystemExit("Python-only pyo3 bindings remain in Vietnamese module")
+path.write_text(text, encoding="utf-8")
+PY
+
 cp "$TOOLS_DIR/Cargo.toml" "$SEA_SOURCE/Cargo.toml"
 cp "$TOOLS_DIR/lib.rs" "$SEA_SOURCE/src/lib.rs"
 rm -f "$SEA_SOURCE/Cargo.lock"
@@ -53,7 +90,12 @@ command -v cargo-ndk >/dev/null 2>&1 || { echo "cargo-ndk is required" >&2; exit
 pushd "$SEA_SOURCE" >/dev/null
 cargo ndk -t arm64-v8a -t x86_64 -o "$JNI_DIR" build --release
 popd >/dev/null
-for abi in arm64-v8a x86_64; do test -s "$JNI_DIR/$abi/libsea_g2p_android.so"; test -s "$JNI_DIR/$abi/libonnxruntime.so"; done
+
+for abi in arm64-v8a x86_64; do
+  test -s "$JNI_DIR/$abi/libsea_g2p_android.so"
+  test -s "$JNI_DIR/$abi/libonnxruntime.so"
+done
+
 printf '\nStage-1 assets prepared.\n'
 printf 'kokoro_vi.onnx  '; sha256sum "$MODEL"
 printf 'sea_g2p.bin     '; sha256sum "$DICTIONARY"
