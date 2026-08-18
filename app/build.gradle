@@ -8,6 +8,9 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 
+def enableKokoroViStage1 = project.hasProperty('kokoroViStage1') &&
+        project.property('kokoroViStage1').toString().toBoolean()
+
 android {
     compileSdk 34
 
@@ -27,9 +30,11 @@ android {
             abiFilters 'arm64-v8a', 'x86_64'
         }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags '-std=c++17'
+        if (enableKokoroViStage1) {
+            externalNativeBuild {
+                cmake {
+                    cppFlags '-std=c++17'
+                }
             }
         }
     }
@@ -61,10 +66,12 @@ android {
         noCompress += ['onnx', 'bin', 'f32le']
     }
 
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/kokoro_vi/CMakeLists.txt')
-            version '3.22.1'
+    if (enableKokoroViStage1) {
+        externalNativeBuild {
+            cmake {
+                path file('src/main/cpp/kokoro_vi/CMakeLists.txt')
+                version '3.22.1'
+            }
         }
     }
 
