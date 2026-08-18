@@ -1,7 +1,11 @@
 package com.CodeBySonu.VoxSherpa.vietnamese;
 
 import android.content.Context;
+
+import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
+
 import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -33,6 +37,7 @@ public final class VietnameseKokoroEngine {
     private boolean modelReady;
     private Map<Character, Long> vocab = new HashMap<>();
     private float[] diemTrinhStyles;
+    private Context appContext;
 
     public interface PcmConsumer { boolean onPcm(byte[] pcm); }
 
@@ -51,19 +56,28 @@ public final class VietnameseKokoroEngine {
         return VietnameseKokoroAssetStore.isBundled(context);
     }
 
-    public void cancel() { generation.incrementAndGet(); }
+    public void cancel() {
+        long newGeneration = generation.incrementAndGet();
+        if (appContext != null) {
+            TtsDiagnostics.info(appContext, "engine", "cancel",
+                    "generation=" + newGeneration + ", modelReady=" + modelReady + ", g2pReady=" + (g2pHandle != 0L));
+        }
+    }
 
     public boolean synthesizeStreaming(Context context, String text, VietnameseKokoroVoice voice,
                                        float speed, PcmConsumer consumer) {
         if (context == null || text == null || text.trim().isEmpty() || consumer == null) return false;
         final long requestGeneration = generation.incrementAndGet();
+        final long startedAt = System.nanoTime();
         try {
             prepare(context.getApplicationContext());
             boolean emitted = false;
+            int chunkCount = 0;
             for (String chunk : splitWithBoundary(text)) {
                 if (requestGeneration != generation.get()) return emitted;
                 for (String safeChunk : splitLongChunk(chunk)) {
                     if (requestGeneration != generation.get()) return emitted;
+                    chunkCount++;
                     float[] audio = synthesizeChunk(safeChunk, voice, speed);
                     if (requestGeneration != generation.get()) return emitted;
                     if (audio != null && audio.length > 0) {
@@ -72,38 +86,67 @@ public final class VietnameseKokoroEngine {
                     }
                 }
             }
+            long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L;
+            TtsDiagnostics.info(context, "engine", "stream_done",
+                    "generation=" + requestGeneration + ", chunks=" + chunkCount
+                            + ", emitted=" + emitted + ", elapsedMs=" + elapsedMs);
             return emitted;
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            TtsDiagnostics.error(context, "engine", "synthesis_exception",
+                    "generation=" + requestGeneration + ", voice=" + voice.id
+                            + ", speed=" + speed + ", chars=" + text.length(), t);
             return false;
         }
     }
 
     public synchronized void release() {
         generation.incrementAndGet();
-        try { if (g2pHandle != 0L) nativeBridge.destroyG2p(g2pHandle); } catch (Throwable ignored) {}
+        try {
+            if (g2pHandle != 0L) nativeBridge.destroyG2p(g2pHandle);
+        } catch (Throwable t) {
+            if (appContext != null) TtsDiagnostics.error(appContext, "engine", "destroy_g2p_failed", t.toString(), t);
+        }
         g2pHandle = 0L;
-        try { if (modelReady) nativeBridge.destroyEngine(); } catch (Throwable ignored) {}
+        try {
+            if (modelReady) nativeBridge.destroyEngine();
+        } catch (Throwable t) {
+            if (appContext != null) TtsDiagnostics.error(appContext, "engine", "destroy_model_failed", t.toString(), t);
+        }
         modelReady = false;
         assets = null;
         vocab.clear();
         diemTrinhStyles = null;
+        if (appContext != null) TtsDiagnostics.info(appContext, "engine", "released", "Vietnamese engine resources released.");
     }
 
     private synchronized void prepare(Context context) throws Exception {
+        appContext = context.getApplicationContext();
         if (!VietnameseKokoroNative.isAvailable()) {
-            throw new IllegalStateException(VietnameseKokoroNative.loadError());
+            IllegalStateException error = new IllegalStateException(VietnameseKokoroNative.loadError());
+            TtsDiagnostics.error(context, "engine", "native_unavailable", error.getMessage(), error);
+            throw error;
         }
         if (assets == null) {
+            long started = System.nanoTime();
             assets = VietnameseKokoroAssetStore.ensure(context);
             vocab = loadVocab(context);
+            TtsDiagnostics.info(context, "engine", "assets_and_vocab_ready",
+                    "vocabEntries=" + vocab.size() + ", elapsedMs=" + ((System.nanoTime() - started) / 1_000_000L));
         }
         if (g2pHandle == 0L) {
+            long started = System.nanoTime();
             g2pHandle = nativeBridge.createG2p(assets.dictionary.getAbsolutePath());
             if (g2pHandle == 0L) throw new IllegalStateException("Vietnamese G2P failed to initialize.");
+            TtsDiagnostics.info(context, "engine", "g2p_ready",
+                    "elapsedMs=" + ((System.nanoTime() - started) / 1_000_000L));
         }
         if (!modelReady) {
+            long started = System.nanoTime();
             modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath());
             if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");
+            TtsDiagnostics.info(context, "engine", "model_ready",
+                    "elapsedMs=" + ((System.nanoTime() - started) / 1_000_000L)
+                            + ", modelBytes=" + assets.model.length());
         }
     }
 
@@ -127,6 +170,7 @@ public final class VietnameseKokoroEngine {
     }
 
     private float[] synthesizeChunk(String text, VietnameseKokoroVoice voice, float speed) throws Exception {
+        long started = System.nanoTime();
         String phonemes = phonemize(text);
         if (phonemes.trim().isEmpty()) return new float[0];
         ArrayList<Long> idList = new ArrayList<>();
@@ -139,7 +183,14 @@ public final class VietnameseKokoroEngine {
         for (int i = 0; i < idList.size(); i++) ids[i + 1] = idList.get(i);
         float[] style = selectStyle(voice, phonemes.length());
         float safeSpeed = Math.max(0.70f, Math.min(1.50f, speed));
-        return nativeBridge.synthesize(ids, style, safeSpeed);
+        float[] audio = nativeBridge.synthesize(ids, style, safeSpeed);
+        if (appContext != null) {
+            TtsDiagnostics.info(appContext, "engine", "chunk_synthesized",
+                    "textChars=" + text.length() + ", phonemeChars=" + phonemes.length()
+                            + ", tokenIds=" + ids.length + ", audioSamples=" + (audio == null ? 0 : audio.length)
+                            + ", elapsedMs=" + ((System.nanoTime() - started) / 1_000_000L));
+        }
+        return audio;
     }
 
     private float[] selectStyle(VietnameseKokoroVoice voice, int phonemeCount) throws Exception {
@@ -152,6 +203,10 @@ public final class VietnameseKokoroEngine {
             if (bytes.length != expected) throw new IllegalStateException("Invalid voicepack size: " + bytes.length);
             diemTrinhStyles = new float[bytes.length / Float.BYTES];
             ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(diemTrinhStyles);
+            if (appContext != null) {
+                TtsDiagnostics.info(appContext, "engine", "voicepack_loaded",
+                        "voice=" + voice.id + ", bytes=" + bytes.length + ", floats=" + diemTrinhStyles.length);
+            }
         }
         int row = Math.max(1, Math.min(MAX_PHONEMES, phonemeCount)) - 1;
         int start = row * STYLE_SIZE;
