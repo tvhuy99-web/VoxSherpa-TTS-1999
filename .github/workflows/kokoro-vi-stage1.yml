@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - agent/kokoro-vietnamese-integration
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
