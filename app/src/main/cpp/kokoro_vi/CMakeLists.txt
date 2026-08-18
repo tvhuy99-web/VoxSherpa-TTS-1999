@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(voxsherpa_kokoro_vi LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(APP_MAIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+set(JNI_LIB_DIR "${APP_MAIN_DIR}/jniLibs/${ANDROID_ABI}")
+set(ORT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime_headers")
+
+if(NOT EXISTS "${ORT_INCLUDE_DIR}/onnxruntime_cxx_api.h")
+    message(FATAL_ERROR "Missing ONNX Runtime headers. Run scripts/prepare_kokoro_vi_stage1.sh first.")
+endif()
+if(NOT EXISTS "${JNI_LIB_DIR}/libonnxruntime.so")
+    message(FATAL_ERROR "Missing ${JNI_LIB_DIR}/libonnxruntime.so. Run Stage-1 preparation first.")
+endif()
+if(NOT EXISTS "${JNI_LIB_DIR}/libsea_g2p_android.so")
+    message(FATAL_ERROR "Missing ${JNI_LIB_DIR}/libsea_g2p_android.so. Run Stage-1 preparation first.")
+endif()
+
+add_library(onnxruntime SHARED IMPORTED)
+set_target_properties(onnxruntime PROPERTIES IMPORTED_LOCATION "${JNI_LIB_DIR}/libonnxruntime.so")
+add_library(sea_g2p_android SHARED IMPORTED)
+set_target_properties(sea_g2p_android PROPERTIES IMPORTED_LOCATION "${JNI_LIB_DIR}/libsea_g2p_android.so")
+
+add_library(voxsherpa_kokoro_vi SHARED kokoro_vi_jni.cpp)
+target_include_directories(voxsherpa_kokoro_vi PRIVATE "${ORT_INCLUDE_DIR}")
+find_library(log_lib log)
+find_library(android_lib android)
+target_link_libraries(voxsherpa_kokoro_vi onnxruntime sea_g2p_android ${android_lib} ${log_lib})

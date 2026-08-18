@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import com.CodeBySonu.VoxSherpa.KokoroVoiceHelper;
+import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
 
 public class CheckTtsDataActivity extends Activity {
 
@@ -22,7 +23,7 @@ public class CheckTtsDataActivity extends Activity {
         try {
             SharedPreferences sp = getSharedPreferences("sp1", MODE_PRIVATE);
             String allData = sp.getString("models_data", "[]");
-            java.util.ArrayList<java.util.HashMap<String, Object>> downloadedModels = 
+            java.util.ArrayList<java.util.HashMap<String, Object>> downloadedModels =
                 new com.google.gson.Gson().fromJson(allData, new com.google.gson.reflect.TypeToken<java.util.ArrayList<java.util.HashMap<String, Object>>>(){}.getType());
 
             Set<String> uniqueLocales = new HashSet<>();
@@ -36,11 +37,11 @@ public class CheckTtsDataActivity extends Activity {
                         if (isKokoroType) {
                             isKokoroDownloaded = true;
                         } else {
-                            String rawLanguage = m.containsKey("language") ? m.get("language").toString() : "";
+                            String rawLanguage = m.containsKey("language") && m.get("language") != null ? m.get("language").toString() : "";
                             if (!rawLanguage.isEmpty()) {
                                 String[] isoLang = TtsLocaleHelper.getTtsLanguageArray(rawLanguage);
                                 if (isoLang != null && isoLang[0] != null && !isoLang[0].isEmpty()) {
-                                    uniqueLocales.add(isoLang[0]); // ONLY LANGUAGE CODE
+                                    uniqueLocales.add(isoLang[0]);
                                 }
                             }
                         }
@@ -52,10 +53,14 @@ public class CheckTtsDataActivity extends Activity {
                     for (String lang : kokoroLangs) {
                         String[] isoLang = TtsLocaleHelper.getTtsLanguageArray(lang);
                         if (isoLang != null && isoLang[0] != null && !isoLang[0].isEmpty()) {
-                            uniqueLocales.add(isoLang[0]); // ONLY LANGUAGE CODE
+                            uniqueLocales.add(isoLang[0]);
                         }
                     }
                 }
+            }
+
+            if (VietnameseKokoroEngine.isBundled(this)) {
+                uniqueLocales.add("vie");
             }
 
             availableVoices.addAll(uniqueLocales);
@@ -63,7 +68,6 @@ public class CheckTtsDataActivity extends Activity {
             Intent returnData = new Intent();
             returnData.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, availableVoices);
             returnData.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, unavailableVoices);
-
             setResult(TextToSpeech.Engine.CHECK_VOICE_DATA_PASS, returnData);
 
         } catch (Throwable t) {

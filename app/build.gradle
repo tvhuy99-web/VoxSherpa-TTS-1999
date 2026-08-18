@@ -21,10 +21,16 @@ android {
         // Skipped version codes (13–21) due to technical restructuring.
         versionCode 22
         versionName "4.0"
-        
-        // Single APK configuration supporting both 64-bit Mobile and 64-bit Emulator
+
+        // Preserve VoxSherpa's existing ABIs. The Vietnamese prep script builds sea-g2p for both.
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+            }
         }
     }
 
@@ -33,7 +39,7 @@ android {
             minifyEnabled true
             shrinkResources true
             signingConfig signingConfigs.debug
-            
+
             // Using standard proguard rules instead of optimize version to save RAM
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -47,7 +53,19 @@ android {
         jniLibs {
             useLegacyPackaging true
         }
+        // sherpa-onnx 1.12.26 and the Vietnamese native target intentionally share ORT 1.17.1.
         pickFirst '**/*.so'
+    }
+
+    androidResources {
+        noCompress 'onnx', 'bin', 'f32le'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/kokoro_vi/CMakeLists.txt')
+            version '3.22.1'
+        }
     }
 
     compileOptions {
@@ -58,10 +76,10 @@ android {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    
+
     implementation 'com.squareup.okhttp3:okhttp:5.0.0-alpha.14'
     implementation 'com.squareup.okio:okio-jvm:3.9.0'
-    
+
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'com.google.android.material:material:1.12.0'
     implementation platform('com.google.firebase:firebase-bom:34.1.0')

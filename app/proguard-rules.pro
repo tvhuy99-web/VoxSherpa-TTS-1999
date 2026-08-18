@@ -13,3 +13,7 @@
 
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+
+# JNI symbols use this exact Java class name; never repackage/rename it.
+-keep class com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative { *; }
+-keepnames class com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative
