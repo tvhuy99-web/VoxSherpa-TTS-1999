@@ -5,11 +5,14 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.content.SharedPreferences;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+
 import com.CodeBySonu.VoxSherpa.KokoroVoiceHelper;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
+import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative;
 
 public class CheckTtsDataActivity extends Activity {
 
@@ -59,11 +62,14 @@ public class CheckTtsDataActivity extends Activity {
                 }
             }
 
-            if (VietnameseKokoroEngine.isBundled(this)) {
-                uniqueLocales.add("vie");
-            }
+            boolean vietnameseBundled = VietnameseKokoroEngine.isBundled(this);
+            if (vietnameseBundled) uniqueLocales.add("vie");
 
             availableVoices.addAll(uniqueLocales);
+            TtsDiagnostics.info(this, "check_tts_data", "result",
+                    "available=" + availableVoices + ", vietnameseBundled=" + vietnameseBundled
+                            + ", nativeAvailable=" + VietnameseKokoroNative.isAvailable()
+                            + ", nativeError=" + VietnameseKokoroNative.loadError());
 
             Intent returnData = new Intent();
             returnData.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, availableVoices);
@@ -71,6 +77,7 @@ public class CheckTtsDataActivity extends Activity {
             setResult(TextToSpeech.Engine.CHECK_VOICE_DATA_PASS, returnData);
 
         } catch (Throwable t) {
+            TtsDiagnostics.error(this, "check_tts_data", "exception", t.toString(), t);
             Intent fallback = new Intent();
             fallback.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, availableVoices);
             fallback.putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, unavailableVoices);
