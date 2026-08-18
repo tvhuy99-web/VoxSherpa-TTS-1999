@@ -62,7 +62,7 @@ jobs:
       - name: Build Stage-1 release APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon -x test -x lint
+          ./gradlew assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
 
       - name: Upload Stage-1 APK
         uses: actions/upload-artifact@v4
