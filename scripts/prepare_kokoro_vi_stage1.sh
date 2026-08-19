@@ -44,12 +44,23 @@ model_size=$(wc -c < "$MODEL"); dict_size=$(wc -c < "$DICTIONARY")
 (( dict_size >= 50000000 )) || { echo "sea_g2p.bin is unexpectedly small: $dict_size" >&2; exit 1; }
 test -s "$ASSET_DIR/config.json"
 
-# Use Microsoft's official Maven-published Android AAR. The AAR contains both
-# libonnxruntime.so and the public C/C++ headers needed by our JNI bridge.
-ORT_AAR="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.aar"
 ORT_EXTRACT="$WORK_DIR/onnxruntime-${ORT_VERSION}"
-fetch "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.aar" "$ORT_AAR"
-rm -rf "$ORT_EXTRACT"; mkdir -p "$ORT_EXTRACT"; unzip -q "$ORT_AAR" -d "$ORT_EXTRACT"
+rm -rf "$ORT_EXTRACT"; mkdir -p "$ORT_EXTRACT"
+if [[ "$ORT_VERSION" == "1.17.1" ]]; then
+  # Keep the exact Android ORT binary/header distribution used by the proven
+  # fast baseline. Device diagnostics showed the Maven 1.17.1 AAR was
+  # materially slower even though the semantic ORT version was unchanged.
+  ORT_ZIP="$WORK_DIR/onnxruntime-android-${ORT_VERSION}-proven.zip"
+  fetch "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.zip" "$ORT_ZIP"
+  unzip -q "$ORT_ZIP" -d "$ORT_EXTRACT"
+  ORT_SOURCE_LABEL="proven-csukuangfj-android-zip"
+else
+  # Newer comparison runtimes continue to use Microsoft's official Android AAR.
+  ORT_AAR="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.aar"
+  fetch "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.aar" "$ORT_AAR"
+  unzip -q "$ORT_AAR" -d "$ORT_EXTRACT"
+  ORT_SOURCE_LABEL="microsoft-maven-aar"
+fi
 cp "$ORT_EXTRACT/jni/arm64-v8a/libonnxruntime.so" "$JNI_DIR/arm64-v8a/libonnxruntime.so"
 cp "$ORT_EXTRACT/jni/x86_64/libonnxruntime.so" "$JNI_DIR/x86_64/libonnxruntime.so"
 rm -rf "$CPP_DIR/onnxruntime_headers"; mkdir -p "$CPP_DIR/onnxruntime_headers"
@@ -108,7 +119,7 @@ test -s "$CPP_DIR/onnxruntime_headers/onnxruntime_cxx_api.h"
 test -s "$CPP_DIR/onnxruntime_headers/onnxruntime_c_api.h"
 
 printf '\nVietnamese Kokoro assets prepared: %d voices.\n' "${#VOICES[@]}"
-printf 'ONNX Runtime     %s\n' "$ORT_VERSION"
+printf 'ONNX Runtime     %s (%s)\n' "$ORT_VERSION" "$ORT_SOURCE_LABEL"
 printf 'kokoro_vi.onnx  '; sha256sum "$MODEL"
 printf 'sea_g2p.bin     '; sha256sum "$DICTIONARY"
 for voice in "${VOICES[@]}"; do
