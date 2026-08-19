@@ -55,8 +55,8 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust Android target
-        run: rustup target add aarch64-linux-android
+      - name: Install Rust Android targets
+        run: rustup target add aarch64-linux-android x86_64-linux-android
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
