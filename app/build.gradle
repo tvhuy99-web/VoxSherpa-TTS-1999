@@ -10,6 +10,8 @@ repositories {
 
 def enableKokoroViStage1 = project.hasProperty('kokoroViStage1') &&
         project.property('kokoroViStage1').toString().toBoolean()
+def enableKokoroViQnnGpu = project.hasProperty('kokoroViQnnGpu') &&
+        project.property('kokoroViQnnGpu').toString().toBoolean()
 
 // CI builds get a monotonically increasing code so a stable-signed APK can update in place.
 // A private signing key is NEVER stored in this public repository. When the four VOX_SIGNING_*
@@ -39,9 +41,15 @@ android {
         targetSdkVersion 36
         versionCode resolvedVersionCode
         versionName resolvedVersionName
+        buildConfigField "boolean", "KOKORO_QNN_GPU_DEFAULT", enableKokoroViQnnGpu ? "true" : "false"
 
         ndk {
-            abiFilters 'arm64-v8a', 'x86_64'
+            if (enableKokoroViQnnGpu) {
+                // Qualcomm QNN Android artifacts are ARM64-only. Keep the normal build unchanged.
+                abiFilters 'arm64-v8a'
+            } else {
+                abiFilters 'arm64-v8a', 'x86_64'
+            }
         }
 
         if (enableKokoroViStage1) {
@@ -78,6 +86,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     packaging {
