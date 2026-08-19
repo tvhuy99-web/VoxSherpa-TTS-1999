@@ -16,7 +16,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -24,7 +23,9 @@ import android.widget.TextView;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnosticsActivity;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
+import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
 import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.util.Locale;
 import java.util.WeakHashMap;
@@ -56,6 +57,7 @@ public class SketchApplication extends Application {
                     }
                 });
         super.onCreate();
+        VietnameseGenerateIntegration.ensureDefaultActiveModel(this);
         installDiagnosticsShortcut();
     }
 
@@ -66,11 +68,6 @@ public class SketchApplication extends Application {
         TtsDiagnostics.info(this, "memory", "trim",
                 "level=" + level + ", kokoro={" + engine.performanceState(this) + "}");
 
-        // Android commonly reports UI_HIDDEN (20), BACKGROUND (40), and MODERATE (60)
-        // simply because the app UI moved to the background. Releasing at those levels
-        // defeats TalkBack latency because the 325 MB ONNX session must be loaded again.
-        // Keep it hot and let Android kill the process if it truly needs the memory.
-        // Explicitly release only for the strongest in-process signal or onLowMemory().
         if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
                 || level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
             engine.releaseForMemoryPressure(this, "onTrimMemory level=" + level);
@@ -101,6 +98,7 @@ public class SketchApplication extends Application {
 
             @Override
             public void onActivityDestroyed(Activity activity) {
+                VietnameseGenerateIntegration.onActivityDestroyed(activity);
                 ViewTreeObserver.OnGlobalLayoutListener listener = diagnosticsWatchers.remove(activity);
                 if (listener == null || activity == null || activity.getWindow() == null) return;
                 View root = activity.getWindow().getDecorView();
@@ -125,19 +123,15 @@ public class SketchApplication extends Application {
         ViewTreeObserver.OnGlobalLayoutListener listener = () -> {
             ensureSettingsIntegration(activity);
             ensureBundledModelCard(activity);
+            VietnameseGenerateIntegration.install(activity);
         };
         root.getViewTreeObserver().addOnGlobalLayoutListener(listener);
         diagnosticsWatchers.put(activity, listener);
         ensureSettingsIntegration(activity);
         ensureBundledModelCard(activity);
+        VietnameseGenerateIntegration.install(activity);
     }
 
-    /**
-     * Upgrades the Settings screen without changing its generated fragment structure:
-     * - opens the real Vietnamese-aware TTS settings Activity directly (no activity-alias hop),
-     * - counts the bundled Vietnamese model,
-     * - keeps the direct TTS Logs shortcut beside Clear All Cache.
-     */
     private void ensureSettingsIntegration(Activity activity) {
         try {
             int clearId = activity.getResources().getIdentifier(
@@ -175,9 +169,9 @@ public class SketchApplication extends Application {
                     if (summary != null) {
                         String current = summary.getText() == null ? "" : summary.getText().toString();
                         if (current.startsWith("0 local models") || current.trim().isEmpty()) {
-                            summary.setText("1 bundled Vietnamese model installed");
+                            summary.setText("1 bundled Vietnamese model • 14 voices installed");
                         } else if (!current.toLowerCase(Locale.ROOT).contains("bundled")) {
-                            summary.setText(current + " • 1 bundled Vietnamese model");
+                            summary.setText(current + " • 1 bundled Vietnamese model / 14 voices");
                         }
                     }
                 }
@@ -274,28 +268,18 @@ public class SketchApplication extends Application {
         }
     }
 
-    /**
-     * The Models tab is backed by downloaded/imported entries in sp1.models_data, so a bundled
-     * model otherwise appears as "Models Not Added". Render a small installed-only card without
-     * inserting a fake bundled:// record into models_data (which would confuse legacy model code).
-     */
+    /** Always exposes the bundled model as a selectable peer of downloaded models. */
     private void ensureBundledModelCard(Activity activity) {
         try {
             if (!VietnameseKokoroEngine.isBundled(activity)) return;
 
-            int frameId = activity.getResources().getIdentifier(
-                    "frame_layout14", "id", activity.getPackageName());
-            int emptyId = activity.getResources().getIdentifier(
-                    "empty_state_view", "id", activity.getPackageName());
-            int recyclerId = activity.getResources().getIdentifier(
-                    "recyclerview_models", "id", activity.getPackageName());
-            if (frameId == 0 || emptyId == 0 || recyclerId == 0) return;
-
-            View frameView = activity.findViewById(frameId);
-            View empty = activity.findViewById(emptyId);
-            View recycler = activity.findViewById(recyclerId);
-            if (!(frameView instanceof FrameLayout) || empty == null || recycler == null) return;
-            FrameLayout frame = (FrameLayout) frameView;
+            int listParentId = activity.getResources().getIdentifier("linear4", "id", activity.getPackageName());
+            int frameId = activity.getResources().getIdentifier("frame_layout14", "id", activity.getPackageName());
+            if (listParentId == 0 || frameId == 0) return;
+            View parentView = activity.findViewById(listParentId);
+            View frame = activity.findViewById(frameId);
+            if (!(parentView instanceof LinearLayout) || frame == null) return;
+            LinearLayout parent = (LinearLayout) parentView;
 
             int sortId = activity.getResources().getIdentifier("sort_tv", "id", activity.getPackageName());
             TextView sort = sortId == 0 ? null : activity.findViewById(sortId);
@@ -305,40 +289,29 @@ public class SketchApplication extends Application {
                     || filter.equals("installed")
                     || filter.contains("vietnamese")
                     || filter.contains("tiếng việt");
-            boolean legacyListEmpty = recycler.getVisibility() != View.VISIBLE;
-            boolean shouldShow = legacyListEmpty && filterAllowsBundled;
 
-            View existing = frame.findViewWithTag("voxsherpa_bundled_vi_model_card");
-            if (!shouldShow) {
-                if (existing != null) existing.setVisibility(View.GONE);
-                if (legacyListEmpty) empty.setVisibility(View.VISIBLE);
-                return;
-            }
-
-            empty.setVisibility(View.GONE);
-            int countId = activity.getResources().getIdentifier(
-                    "model_count_tv", "id", activity.getPackageName());
-            if (countId != 0) {
-                TextView count = activity.findViewById(countId);
-                if (count != null) count.setText("MODELS LIST (1)");
-            }
-
+            View existing = parent.findViewWithTag("voxsherpa_bundled_vi_model_card");
             if (existing != null) {
-                existing.setVisibility(View.VISIBLE);
+                existing.setVisibility(filterAllowsBundled ? View.VISIBLE : View.GONE);
+                if (filterAllowsBundled && existing instanceof MaterialCardView) {
+                    ((MaterialCardView) existing).setStrokeWidth(
+                            VietnameseGenerateIntegration.isBundledActive(activity) ? dp(activity, 2) : dp(activity, 1));
+                }
+                updateModelCount(activity);
                 return;
             }
+            if (!filterAllowsBundled) return;
 
             MaterialCardView card = new MaterialCardView(activity);
             card.setTag("voxsherpa_bundled_vi_model_card");
             card.setCardBackgroundColor(Color.parseColor("#131B2D"));
             card.setStrokeColor(Color.parseColor("#1D61FF"));
-            card.setStrokeWidth(dp(activity, 1));
+            card.setStrokeWidth(VietnameseGenerateIntegration.isBundledActive(activity) ? dp(activity, 2) : dp(activity, 1));
             card.setRadius(dp(activity, 14));
             card.setCardElevation(0f);
-            card.setClickable(false);
+            card.setClickable(true);
             card.setFocusable(true);
-            card.setContentDescription(
-                    "Vietnamese Kokoro. Diễm Trinh. Bundled, offline, installed.");
+            card.setContentDescription("Vietnamese Kokoro. 14 giọng tiếng Việt. Bundled, offline, installed. Nhấn để dùng trong Generate.");
 
             LinearLayout body = new LinearLayout(activity);
             body.setOrientation(LinearLayout.VERTICAL);
@@ -353,7 +326,7 @@ public class SketchApplication extends Application {
             body.addView(title);
 
             TextView subtitle = new TextView(activity);
-            subtitle.setText("Diễm Trinh • Bundled • Offline • Installed");
+            subtitle.setText("14 voices • Bundled • Offline • Installed • Tap to use in Generate");
             subtitle.setTextSize(13f);
             subtitle.setTextColor(Color.parseColor("#A0AEC0"));
             LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
@@ -363,17 +336,56 @@ public class SketchApplication extends Application {
 
             card.addView(body, new MaterialCardView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.TOP);
-            cardParams.setMargins(0, dp(activity, 4), 0, 0);
-            frame.addView(card, cardParams);
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardParams.setMargins(0, 0, 0, dp(activity, 10));
+            int frameIndex = parent.indexOfChild(frame);
+            parent.addView(card, Math.max(0, frameIndex), cardParams);
+
+            card.setOnClickListener(v -> {
+                VietnameseKokoroVoice voice = VietnameseGenerateIntegration.getActiveVoice(activity);
+                VietnameseGenerateIntegration.activateBundledModel(activity, voice);
+                card.setStrokeWidth(dp(activity, 2));
+                View root = activity.findViewById(android.R.id.content);
+                if (root != null) {
+                    Snackbar.make(root,
+                            "Vietnamese Kokoro selected for Generate • " + voice.displayName,
+                            Snackbar.LENGTH_SHORT).show();
+                }
+                TtsDiagnostics.info(activity, "models", "bundled_model_selected",
+                        "Selected Vietnamese Kokoro for Generate; voice=" + voice.id);
+                VietnameseGenerateIntegration.install(activity);
+            });
+
+            updateModelCount(activity);
             TtsDiagnostics.info(activity, "models", "bundled_model_card_added",
-                    "Models tab now exposes bundled Vietnamese Kokoro / Diem Trinh as installed.");
+                    "Models tab exposes Vietnamese Kokoro as selectable; voices="
+                            + VietnameseKokoroVoice.all().size());
         } catch (Throwable t) {
             TtsDiagnostics.error(activity, "models", "bundled_model_card_failed",
                     "Failed to expose bundled Vietnamese model in Models tab.", t);
         }
+    }
+
+    private void updateModelCount(Activity activity) {
+        try {
+            int downloaded = 0;
+            String raw = activity.getSharedPreferences("sp1", Context.MODE_PRIVATE)
+                    .getString("models_data", "[]");
+            java.util.ArrayList<?> list = new com.google.gson.Gson().fromJson(
+                    raw, new com.google.gson.reflect.TypeToken<java.util.ArrayList<java.util.HashMap<String, Object>>>() {}.getType());
+            if (list != null) downloaded = list.size();
+            int countId = activity.getResources().getIdentifier("model_count_tv", "id", activity.getPackageName());
+            if (countId != 0) {
+                TextView count = activity.findViewById(countId);
+                if (count != null) count.setText("MODELS LIST (" + (downloaded + 1) + ")");
+            }
+            int emptyId = activity.getResources().getIdentifier("empty_state_view", "id", activity.getPackageName());
+            if (emptyId != 0) {
+                View empty = activity.findViewById(emptyId);
+                if (empty != null && downloaded == 0) empty.setVisibility(View.GONE);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private static int dp(Context context, int value) {
