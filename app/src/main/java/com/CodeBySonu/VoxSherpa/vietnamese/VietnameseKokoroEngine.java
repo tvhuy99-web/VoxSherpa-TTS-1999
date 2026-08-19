@@ -525,11 +525,11 @@ public final class VietnameseKokoroEngine {
         String json;
         try {
             json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 1, 3);
-        } catch (Throwable t) {
+        } catch (Exception e) {
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
-            throw t;
+            throw e;
         }
         JSONObject result = new JSONObject(json);
         int best = result.getInt("bestThreads");
