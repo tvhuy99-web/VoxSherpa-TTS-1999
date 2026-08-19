@@ -121,12 +121,15 @@ public final class SettingsAccessibilityPersistence {
             }
         });
 
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        float defaultValue = kind == SliderKind.SILENCE ? 0.2f : 1.0f;
+        float savedValue = prefs.getFloat(key, defaultValue);
         TtsDiagnostics.info(context, "settings", "accessibility_slider_bound",
-                "key=" + key + ", progress=" + seekBar.getProgress());
+                "key=" + key + ", progress=" + seekBar.getProgress() + ", savedValue=" + savedValue);
     }
 
     private static boolean isProgressAction(int action) {
-        return action == AccessibilityNodeInfo.ACTION_SET_PROGRESS
+        return action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()
                 || action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
                 || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD;
     }
