@@ -11,6 +11,10 @@ HF_REPO="contextboxai/Kokoro-Vietnamese"
 HF_REVISION="9f210d622209fcc216fe2ac6159fed2ff381cb8a"
 SEA_G2P_COMMIT="59001f6dc3ba729a4fb7c7d81f262b7447a68c21"
 ORT_VERSION="1.17.1"
+VOICES=(
+  diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen
+  phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy
+)
 mkdir -p "$ASSET_DIR/voicepacks" "$JNI_DIR/arm64-v8a" "$JNI_DIR/x86_64" "$WORK_DIR"
 
 fetch() {
@@ -23,19 +27,22 @@ fetch() {
 
 MODEL="$ASSET_DIR/kokoro_vi.onnx"
 DICTIONARY="$ASSET_DIR/sea_g2p.bin"
-VOICE_PT="$WORK_DIR/diem_trinh.pt"
-VOICE_F32="$ASSET_DIR/voicepacks/diem_trinh.f32le"
 fetch "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/kokoro_vi.onnx?download=true" "$MODEL"
 fetch "https://raw.githubusercontent.com/pnnbao97/sea-g2p/${SEA_G2P_COMMIT}/python/sea_g2p/sea_g2p.bin" "$DICTIONARY"
-fetch "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/voicepacks/diem_trinh.pt?download=true" "$VOICE_PT"
-python3 "$ROOT/tools/kokoro_vi/convert_voicepack.py" "$VOICE_PT" "$VOICE_F32"
+
+for voice in "${VOICES[@]}"; do
+  voice_pt="$WORK_DIR/${voice}.pt"
+  voice_f32="$ASSET_DIR/voicepacks/${voice}.f32le"
+  fetch "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/voicepacks/${voice}.pt?download=true" "$voice_pt"
+  python3 "$ROOT/tools/kokoro_vi/convert_voicepack.py" "$voice_pt" "$voice_f32"
+  voice_size=$(wc -c < "$voice_f32")
+  (( voice_size == 522240 )) || { echo "Unexpected ${voice} voicepack size: $voice_size" >&2; exit 1; }
+done
 
 model_size=$(wc -c < "$MODEL"); dict_size=$(wc -c < "$DICTIONARY")
 (( model_size >= 300000000 )) || { echo "kokoro_vi.onnx is unexpectedly small: $model_size" >&2; exit 1; }
 (( dict_size >= 50000000 )) || { echo "sea_g2p.bin is unexpectedly small: $dict_size" >&2; exit 1; }
-test -s "$ASSET_DIR/config.json"; test -s "$VOICE_F32"
-voice_size=$(wc -c < "$VOICE_F32")
-(( voice_size == 522240 )) || { echo "Unexpected voicepack size: $voice_size" >&2; exit 1; }
+test -s "$ASSET_DIR/config.json"
 
 ORT_ZIP="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.zip"
 ORT_EXTRACT="$WORK_DIR/onnxruntime-${ORT_VERSION}"
@@ -52,9 +59,8 @@ fetch "https://github.com/pnnbao97/sea-g2p/archive/${SEA_G2P_COMMIT}.tar.gz" "$S
 rm -rf "$SEA_SOURCE"; mkdir -p "$SEA_SOURCE"
 tar -xzf "$SEA_ARCHIVE" --strip-components=1 -C "$SEA_SOURCE"
 
-# The upstream Rust crate also exposes Python bindings via pyo3. Android only
-# needs the native Rust core, so strip the Python-only annotations/signature
-# while preserving the exact Vietnamese normalization and G2P implementation.
+# Android needs only the native Rust core. Strip Python-only pyo3 annotations while
+# preserving upstream Vietnamese normalization/G2P behavior at the pinned commit.
 VI_MOD="$SEA_SOURCE/src/lang/vi/mod.rs"
 python3 - "$VI_MOD" <<'PY'
 from pathlib import Path
@@ -96,7 +102,10 @@ for abi in arm64-v8a x86_64; do
   test -s "$JNI_DIR/$abi/libonnxruntime.so"
 done
 
-printf '\nStage-1 assets prepared.\n'
+printf '\nVietnamese Kokoro assets prepared: %d voices.\n' "${#VOICES[@]}"
 printf 'kokoro_vi.onnx  '; sha256sum "$MODEL"
 printf 'sea_g2p.bin     '; sha256sum "$DICTIONARY"
-printf 'diem_trinh.f32 '; sha256sum "$VOICE_F32"
+for voice in "${VOICES[@]}"; do
+  printf '%-18s ' "${voice}.f32le"
+  sha256sum "$ASSET_DIR/voicepacks/${voice}.f32le"
+done
