@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <dlfcn.h>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -38,8 +39,8 @@ std::mutex g_run_options_mutex;
 Ort::RunOptions* g_active_run_options = nullptr;
 std::atomic<bool> g_cancel_requested{false};
 std::atomic<bool> g_active_nnapi{false};
-std::array<int64_t, 6> g_last_timing_us{0,0,0,0,0,4};
-int g_active_threads = 4;
+std::array<int64_t, 6> g_last_timing_us{0,0,0,0,0,0};
+int g_active_threads = 0;
 
 int64_t us_since(const Clock::time_point& start) {
     return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
@@ -97,6 +98,8 @@ void append_nnapi(Ort::SessionOptions& options) {
 
 std::unique_ptr<Ort::Session> create_session(const std::string& path, int cpu_threads, bool use_nnapi) {
     Ort::SessionOptions options;
+    // cpu_threads == 0 intentionally leaves ORT in its default intra-op mode. With
+    // sequential execution this also lets ORT choose its normal worker affinity.
     if (cpu_threads > 0) options.SetIntraOpNumThreads(cpu_threads);
     options.SetInterOpNumThreads(1);
     options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
@@ -150,10 +153,10 @@ RunResult run_once(Ort::Session& session, const std::vector<int64_t>& ids,
     auto style_tensor = Ort::Value::CreateTensor<float>(memory, const_cast<float*>(style.data()), style.size(), style_shape.data(), style_shape.size());
     auto speed_tensor = Ort::Value::CreateTensor<float>(memory, &speed, 1, scalar_shape.data(), scalar_shape.size());
     const char* input_names[] = {"input_ids", "ref_s", "speed"};
-    const char* output_names[] = {"waveform", "duration"};
+    const char* output_names[] = {"waveform"};
     std::array<Ort::Value,3> inputs{std::move(ids_tensor), std::move(style_tensor), std::move(speed_tensor)};
     auto started = Clock::now();
-    auto outputs = session.Run(Ort::RunOptions{nullptr}, input_names, inputs.data(), inputs.size(), output_names, 2);
+    auto outputs = session.Run(Ort::RunOptions{nullptr}, input_names, inputs.data(), inputs.size(), output_names, 1);
     RunResult r;
     r.elapsed_us = us_since(started);
     r.samples = outputs[0].GetTensorTypeAndShapeInfo().GetElementCount();
@@ -165,6 +168,42 @@ int64_t median_us(std::vector<int64_t> values) {
     std::sort(values.begin(), values.end());
     return values[values.size() / 2];
 }
+
+std::vector<int64_t> resize_ids(const std::vector<int64_t>& base, size_t requested_size) {
+    if (base.size() < 3) return base;
+    const size_t target_size = std::max<size_t>(3, std::min<size_t>(512, requested_size));
+    std::vector<int64_t> out;
+    out.reserve(target_size);
+    out.push_back(base.front());
+    const size_t body_begin = 1;
+    const size_t body_end = base.size() - 1;
+    size_t cursor = body_begin;
+    while (out.size() + 1 < target_size) {
+        out.push_back(base[cursor]);
+        cursor++;
+        if (cursor >= body_end) cursor = body_begin;
+    }
+    out.push_back(base.back());
+    return out;
+}
+
+std::vector<int> cpu_thread_candidates(unsigned int online_cpus) {
+    const unsigned int capped = std::max(1u, std::min(8u, online_cpus));
+    std::vector<int> result;
+    result.reserve(static_cast<size_t>(capped) + 1);
+    result.push_back(0);
+    for (unsigned int threads = 1; threads <= capped; ++threads) {
+        result.push_back(static_cast<int>(threads));
+    }
+    return result;
+}
+
+struct CandidateBenchmark {
+    int threads = 0;
+    int64_t load_ms = 0;
+    std::array<int64_t,3> median_us{0,0,0};
+    int64_t score_us = 0;
+};
 }
 
 extern "C" JNIEXPORT jlong JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_createG2p(JNIEnv* env, jobject, jstring dictionary_path) {
@@ -210,7 +249,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_V
         } else {
             g_session = create_session(path, cpu_threads, false);
             g_active_nnapi.store(false, std::memory_order_release);
-            LOGI("Vietnamese Kokoro loaded with CPU cpuThreads=%d (0=ORT default)", cpu_threads);
+            LOGI("Vietnamese Kokoro loaded with CPU cpuThreads=%d (0=ORT default + auto affinity)", cpu_threads);
         }
         g_active_threads = cpu_threads;
         return JNI_TRUE;
@@ -275,7 +314,7 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnames
         auto style_tensor = Ort::Value::CreateTensor<float>(memory, style.data(), style.size(), style_shape.data(), style_shape.size());
         auto speed_tensor = Ort::Value::CreateTensor<float>(memory, &speed, 1, scalar_shape.data(), scalar_shape.size());
         const char* input_names[] = {"input_ids", "ref_s", "speed"};
-        const char* output_names[] = {"waveform", "duration"};
+        const char* output_names[] = {"waveform"};
         std::array<Ort::Value,3> inputs{std::move(ids_tensor), std::move(style_tensor), std::move(speed_tensor)};
 
         Ort::RunOptions run_options;
@@ -283,7 +322,7 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnames
         auto ort_start = Clock::now();
         std::vector<Ort::Value> outputs;
         try {
-            outputs = g_session->Run(run_options, input_names, inputs.data(), inputs.size(), output_names, 2);
+            outputs = g_session->Run(run_options, input_names, inputs.data(), inputs.size(), output_names, 1);
         } catch (const Ort::Exception& e) {
             const int64_t cancelled_run_us = us_since(ort_start);
             if (g_cancel_requested.load(std::memory_order_acquire)) {
@@ -346,30 +385,68 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
 
         const int warmups = std::max(1, static_cast<int>(warmup_runs));
         const int measures = std::max(3, static_cast<int>(measured_runs));
-        const std::array<int,5> candidates{0,3,4,5,6};
-        std::array<int64_t,5> load_ms{};
-        std::array<int64_t,5> median_run_us{};
-        int best_threads = 4;
-        int64_t best_us = INT64_MAX;
+        const unsigned int detected_cpus = std::thread::hardware_concurrency();
+        const unsigned int online_cpus = detected_cpus == 0 ? 4u : detected_cpus;
+        const std::vector<int> candidates = cpu_thread_candidates(online_cpus);
+
+        const size_t medium_tokens = std::max<size_t>(24, std::min<size_t>(96, ids.size()));
+        const size_t short_tokens = std::max<size_t>(12, medium_tokens / 2);
+        const size_t long_tokens = std::min<size_t>(192, medium_tokens * 2);
+        const std::array<std::vector<int64_t>,3> workloads{
+                resize_ids(ids, short_tokens),
+                resize_ids(ids, medium_tokens),
+                resize_ids(ids, long_tokens)
+        };
+
+        std::vector<CandidateBenchmark> results;
+        results.reserve(candidates.size());
+        int raw_best_threads = 0;
+        int64_t raw_best_score = std::numeric_limits<int64_t>::max();
 
         g_session.reset();
         g_active_nnapi.store(false, std::memory_order_release);
-        for (size_t c = 0; c < candidates.size(); ++c) {
+        for (int candidate : candidates) {
+            CandidateBenchmark result;
+            result.threads = candidate;
             auto load_start = Clock::now();
-            auto session = create_session(path, candidates[c], false);
-            load_ms[c] = us_since(load_start) / 1000;
-            for (int i = 0; i < warmups; ++i) run_once(*session, ids, style, speed);
-            std::vector<int64_t> samples;
-            samples.reserve(static_cast<size_t>(measures));
-            for (int i = 0; i < measures; ++i) {
-                samples.push_back(run_once(*session, ids, style, speed).elapsed_us);
+            auto session = create_session(path, candidate, false);
+            result.load_ms = us_since(load_start) / 1000;
+
+            for (size_t workload = 0; workload < workloads.size(); ++workload) {
+                for (int i = 0; i < warmups; ++i) {
+                    run_once(*session, workloads[workload], style, speed);
+                }
+                std::vector<int64_t> samples;
+                samples.reserve(static_cast<size_t>(measures));
+                for (int i = 0; i < measures; ++i) {
+                    samples.push_back(run_once(*session, workloads[workload], style, speed).elapsed_us);
+                }
+                result.median_us[workload] = median_us(samples);
             }
-            median_run_us[c] = median_us(samples);
-            if (median_run_us[c] < best_us) {
-                best_us = median_run_us[c];
-                best_threads = candidates[c];
+
+            // TalkBack is dominated by short utterances, so weight shorter workloads more.
+            result.score_us = result.median_us[0] * 3
+                    + result.median_us[1] * 2
+                    + result.median_us[2];
+            if (result.score_us < raw_best_score) {
+                raw_best_score = result.score_us;
+                raw_best_threads = candidate;
             }
+            results.push_back(result);
             session.reset();
+        }
+
+        int best_threads = raw_best_threads;
+        bool preferred_ort_default_for_affinity = false;
+        if (!results.empty() && raw_best_threads != 0) {
+            const int64_t default_score = results.front().score_us;
+            // If ORT default is within 3% of the raw winner, keep default. It preserves
+            // ORT's automatic worker affinity and is less brittle across thermal states.
+            if (default_score > 0
+                    && static_cast<double>(default_score) <= static_cast<double>(raw_best_score) * 1.03) {
+                best_threads = 0;
+                preferred_ort_default_for_affinity = true;
+            }
         }
 
         g_session = create_session(path, best_threads, false);
@@ -378,11 +455,25 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
 
         std::ostringstream json;
         json << "{\"bestThreads\":" << best_threads
-             << ",\"default\":{\"loadMs\":" << load_ms[0] << ",\"medianRunUs\":" << median_run_us[0] << "}"
-             << ",\"threads3\":{\"loadMs\":" << load_ms[1] << ",\"medianRunUs\":" << median_run_us[1] << "}"
-             << ",\"threads4\":{\"loadMs\":" << load_ms[2] << ",\"medianRunUs\":" << median_run_us[2] << "}"
-             << ",\"threads5\":{\"loadMs\":" << load_ms[3] << ",\"medianRunUs\":" << median_run_us[3] << "}"
-             << ",\"threads6\":{\"loadMs\":" << load_ms[4] << ",\"medianRunUs\":" << median_run_us[4] << "}}";
+             << ",\"rawBestThreads\":" << raw_best_threads
+             << ",\"preferredOrtDefaultForAffinity\":"
+             << (preferred_ort_default_for_affinity ? "true" : "false")
+             << ",\"onlineCpus\":" << online_cpus
+             << ",\"workloadTokenCounts\":["
+             << workloads[0].size() << "," << workloads[1].size() << "," << workloads[2].size() << "]"
+             << ",\"candidates\":[";
+        for (size_t i = 0; i < results.size(); ++i) {
+            if (i != 0) json << ",";
+            const CandidateBenchmark& r = results[i];
+            json << "{\"threads\":" << r.threads
+                 << ",\"autoAffinity\":" << (r.threads == 0 ? "true" : "false")
+                 << ",\"loadMs\":" << r.load_ms
+                 << ",\"shortMedianUs\":" << r.median_us[0]
+                 << ",\"mediumMedianUs\":" << r.median_us[1]
+                 << ",\"longMedianUs\":" << r.median_us[2]
+                 << ",\"scoreUs\":" << r.score_us << "}";
+        }
+        json << "]}";
         const std::string out = json.str();
         LOGI("CPU benchmark %s", out.c_str());
         return env->NewStringUTF(out.c_str());
