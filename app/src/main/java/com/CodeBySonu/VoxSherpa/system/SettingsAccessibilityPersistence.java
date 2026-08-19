@@ -129,7 +129,7 @@ public final class SettingsAccessibilityPersistence {
     }
 
     private static boolean isProgressAction(int action) {
-        return action == AccessibilityNodeInfo.ACTION_SET_PROGRESS
+        return action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()
                 || action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
                 || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD;
     }
