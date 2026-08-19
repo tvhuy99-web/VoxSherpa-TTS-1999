@@ -9,6 +9,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.CodeBySonu.VoxSherpa.BuildConfig;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
 
 /** Accessible in-app diagnostics viewer/share screen for TTS failures and performance. */
@@ -16,6 +17,8 @@ public class TtsDiagnosticsActivity extends Activity {
     private TextView output;
     private Button benchmark;
     private Button nnapi;
+    private Button cpuBackend;
+    private Button gpuBackend;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +53,32 @@ public class TtsDiagnosticsActivity extends Activity {
 
         root.addView(actions);
 
+        if (BuildConfig.KOKORO_QNN_GPU_DEFAULT) {
+            TextView backendTitle = new TextView(this);
+            backendTitle.setText("Kokoro runtime A/B — same ORT 1.26.0, same model and voice");
+            backendTitle.setTextSize(16f);
+            backendTitle.setPadding(0, pad, 0, 0);
+            root.addView(backendTitle);
+
+            cpuBackend = new Button(this);
+            cpuBackend.setContentDescription(
+                    "Use CPU with ONNX Runtime 1.26.0. Switching rebuilds and warms the same Kokoro model for a fair comparison with QNN GPU.");
+            cpuBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_CPU));
+            root.addView(cpuBackend, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            ));
+
+            gpuBackend = new Button(this);
+            gpuBackend.setContentDescription(
+                    "Use Qualcomm QNN GPU with ONNX Runtime 1.26.0. Switching rebuilds and warms the same Kokoro model for a fair comparison with CPU.");
+            gpuBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_QNN_GPU));
+            root.addView(gpuBackend, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            ));
+        }
+
         nnapi = new Button(this);
         nnapi.setContentDescription(
                 "Toggle the optional Android NNAPI accelerator for Vietnamese Kokoro. "
@@ -59,6 +88,7 @@ public class TtsDiagnosticsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         ));
+        if (BuildConfig.KOKORO_QNN_GPU_DEFAULT) nnapi.setVisibility(android.view.View.GONE);
 
         benchmark = new Button(this);
         benchmark.setText("CPU benchmark: default / 3 / 4 / 5 / 6");
@@ -70,6 +100,7 @@ public class TtsDiagnosticsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         ));
+        if (BuildConfig.KOKORO_QNN_GPU_DEFAULT) benchmark.setVisibility(android.view.View.GONE);
 
         output = new TextView(this);
         output.setTextIsSelectable(true);
@@ -93,6 +124,60 @@ public class TtsDiagnosticsActivity extends Activity {
                 + VietnameseKokoroEngine.getInstance().performanceState(this);
         output.setText(snapshot + perf);
         refreshProviderButton();
+        refreshRuntimeButtons();
+    }
+
+    private void refreshRuntimeButtons() {
+        if (!BuildConfig.KOKORO_QNN_GPU_DEFAULT || cpuBackend == null || gpuBackend == null) return;
+        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();
+        String requested = engine.requestedRuntimeBackend(this);
+        boolean gpuActive = engine.isQnnGpuActive();
+        boolean cpuRequested = VietnameseKokoroEngine.BACKEND_CPU.equals(requested);
+        cpuBackend.setText(cpuRequested
+                ? "CPU • ORT 1.26.0 — SELECTED"
+                : "CPU • ORT 1.26.0 — use this mode");
+        gpuBackend.setText(!cpuRequested
+                ? (gpuActive ? "QNN GPU • ORT 1.26.0 — SELECTED / ACTIVE"
+                        : "QNN GPU • ORT 1.26.0 — SELECTED / FALLBACK CPU")
+                : "QNN GPU • ORT 1.26.0 — use this mode");
+    }
+
+    private void switchRuntimeBackend(String backend) {
+        if (!BuildConfig.KOKORO_QNN_GPU_DEFAULT || cpuBackend == null || gpuBackend == null) return;
+        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();
+        final boolean gpu = VietnameseKokoroEngine.BACKEND_QNN_GPU.equals(backend);
+        cpuBackend.setEnabled(false);
+        gpuBackend.setEnabled(false);
+        cpuBackend.setText(gpu ? "CPU • ORT 1.26.0" : "Switching to CPU…");
+        gpuBackend.setText(gpu ? "Switching to QNN GPU…" : "QNN GPU • ORT 1.26.0");
+        TtsDiagnostics.info(this, "provider", "ui_backend_requested",
+                "User requested runtime backend=" + backend + "; CPU threads reset to ORT default for controlled A/B.");
+
+        new Thread(() -> {
+            try {
+                String active = engine.setRuntimeBackend(this, backend);
+                runOnUiThread(() -> {
+                    cpuBackend.setEnabled(true);
+                    gpuBackend.setEnabled(true);
+                    refresh();
+                    String message;
+                    if (gpu && !"QNN_GPU".equals(active)) {
+                        message = "QNN GPU could not stay active; CPU fallback is active. See the log.";
+                    } else {
+                        message = "Runtime switched to " + active + " and warmed. You can test TalkBack now.";
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                });
+            } catch (Throwable t) {
+                TtsDiagnostics.error(this, "provider", "ui_backend_switch_failed", t.toString(), t);
+                runOnUiThread(() -> {
+                    cpuBackend.setEnabled(true);
+                    gpuBackend.setEnabled(true);
+                    refresh();
+                    Toast.makeText(this, "Runtime switch failed. See TTS Logs.", Toast.LENGTH_LONG).show();
+                });
+            }
+        }, "KokoroVi-Runtime-Switch").start();
     }
 
     private void refreshProviderButton() {
