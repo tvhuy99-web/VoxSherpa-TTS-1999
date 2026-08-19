@@ -37,6 +37,9 @@ public final class VietnameseKokoroEngine {
     private static final String APP_PREFS = "sp3";
     private static final String PREF_CPU_THREADS = "cpu_threads";
     private static final String PREF_NNAPI_ENABLED = "nnapi_enabled";
+    private static final String PREF_RUNTIME_BACKEND = "runtime_backend";
+    public static final String BACKEND_CPU = "CPU";
+    public static final String BACKEND_QNN_GPU = "QNN_GPU";
     private static final String WARMUP_TEXT = "Giọng nói chính.";
     private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.!?…]+(?:[\\\"”’)]*)");
     private static final Pattern EFFECT_TOKEN = Pattern.compile("(\\[[a-zA-Z]+\\]|\\.\\.\\.|[.,!?।])");
@@ -139,6 +142,61 @@ public final class VietnameseKokoroEngine {
         return activeQnnGpu;
     }
 
+    public boolean isDualRuntimeBuild() {
+        return BuildConfig.KOKORO_QNN_GPU_DEFAULT;
+    }
+
+    public String requestedRuntimeBackend(Context context) {
+        if (!BuildConfig.KOKORO_QNN_GPU_DEFAULT || context == null) return BACKEND_CPU;
+        String saved = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE)
+                .getString(PREF_RUNTIME_BACKEND, BACKEND_CPU);
+        return BACKEND_QNN_GPU.equals(saved) ? BACKEND_QNN_GPU : BACKEND_CPU;
+    }
+
+    public boolean isQnnGpuRequested(Context context) {
+        return BuildConfig.KOKORO_QNN_GPU_DEFAULT
+                && BACKEND_QNN_GPU.equals(requestedRuntimeBackend(context));
+    }
+
+    public synchronized String setRuntimeBackend(Context context, String backend) throws Exception {
+        if (context == null) throw new IllegalArgumentException("Context is required.");
+        Context app = context.getApplicationContext();
+        appContext = app;
+        String requested = BACKEND_QNN_GPU.equals(backend) ? BACKEND_QNN_GPU : BACKEND_CPU;
+        if (BACKEND_QNN_GPU.equals(requested) && !BuildConfig.KOKORO_QNN_GPU_DEFAULT) {
+            throw new IllegalStateException("QNN GPU runtime is not packaged in this build.");
+        }
+
+        SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
+        prefs.edit()
+                .putString(PREF_RUNTIME_BACKEND, requested)
+                .putInt(PREF_CPU_THREADS, 0)
+                .putBoolean(PREF_NNAPI_ENABLED, false)
+                .apply();
+
+        long started = System.nanoTime();
+        TtsDiagnostics.info(app, "provider", "backend_switch_start",
+                "requestedBackend=" + requested + ", forcingCpuThreads=ORT-default");
+        cancel();
+        if (modelReady) nativeBridge.destroyEngine();
+        modelReady = false;
+        modelWarm = false;
+        activeNnapi = false;
+        activeQnnGpu = false;
+        activeCpuThreads = 0;
+
+        prepare(app);
+        if (!modelWarm && !warmCurrentSession(app, "runtime_backend_switch:" + requested)) {
+            throw new IllegalStateException("Vietnamese Kokoro runtime switch warm-up was interrupted.");
+        }
+
+        String active = activeProviderLabel();
+        TtsDiagnostics.info(app, "provider", "backend_switch_complete",
+                "requestedBackend=" + requested + ", activeProvider=" + active
+                        + ", elapsedMs=" + elapsedMs(started) + ", " + performanceState(app));
+        return active;
+    }
+
     private String activeProviderLabel() {
         if (activeQnnGpu) return "QNN_GPU";
         if (activeNnapi) return "NNAPI";
@@ -152,6 +210,7 @@ public final class VietnameseKokoroEngine {
         synchronized (this) {
             return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm
                     + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + activeProviderLabel()
+                    + ", requestedBackend=" + requestedRuntimeBackend(context)
                     + ", qnnGpuBuild=" + BuildConfig.KOKORO_QNN_GPU_DEFAULT
                     + ", qnnGpuLibrary=" + VietnameseKokoroNative.isQnnGpuLibraryAvailable()
                     + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads
@@ -533,8 +592,8 @@ public final class VietnameseKokoroEngine {
         appContext = app;
         long totalStart = System.nanoTime();
         SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
-        boolean restoreAccelerator = BuildConfig.KOKORO_QNN_GPU_DEFAULT
-                || prefs.getBoolean(PREF_NNAPI_ENABLED, false);
+        boolean restoreAccelerator = isQnnGpuRequested(app)
+                || (!BuildConfig.KOKORO_QNN_GPU_DEFAULT && prefs.getBoolean(PREF_NNAPI_ENABLED, false));
         TtsDiagnostics.info(app, "benchmark", "cpu_start",
                 "Testing ORT default/3/4/6 across short/medium TalkBack workloads; "
                         + "1 warmup + 2 measured runs per workload. TTS requests may briefly block during this benchmark.");
@@ -606,7 +665,7 @@ public final class VietnameseKokoroEngine {
             long started = System.nanoTime();
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
             activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 0);
-            boolean requestedQnnGpu = BuildConfig.KOKORO_QNN_GPU_DEFAULT;
+            boolean requestedQnnGpu = isQnnGpuRequested(context);
             boolean requestedNnapi = !requestedQnnGpu && prefs.getBoolean(PREF_NNAPI_ENABLED, false);
             if (requestedQnnGpu && !VietnameseKokoroNative.isQnnGpuLibraryAvailable()) {
                 TtsDiagnostics.warn(context, "provider", "qnn_gpu_library_unavailable",
@@ -630,6 +689,7 @@ public final class VietnameseKokoroEngine {
             TtsDiagnostics.info(context, "engine", "model_ready",
                     "elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()
                             + ", provider=" + activeProviderLabel()
+                            + ", requestedBackend=" + requestedRuntimeBackend(context)
                             + ", qnnGpuRequested=" + requestedQnnGpu
                             + ", cpuThreads=" + threadLabel(activeCpuThreads));
         }
