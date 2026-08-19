@@ -30,7 +30,6 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
                 "Unified Vietnamese-aware TTS settings screen opened; primary defaults synchronized and prewarm requested.");
 
         injectBundledVietnameseVoice();
-        // Re-assert after layout/adapter work to make OEM timing or generated UI code harmless.
         View content = findViewById(android.R.id.content);
         if (content != null) {
             content.post(this::injectBundledVietnameseVoice);
@@ -107,7 +106,6 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
                     "Added bundled Diem Trinh to the primary Installed Languages list.");
         }
 
-        // Use exactly the same keys consumed by the existing TTS settings adapter/sp5 path.
         voice.put("voice_id", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
         voice.put("display_name", VietnameseKokoroVoice.DIEM_TRINH.displayName);
         voice.put("subtitle", "Bundled Kokoro Vietnamese • Offline • Installed");
@@ -119,9 +117,9 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         voice.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
         voice.put("speaker_id", "0");
 
-        getSharedPreferences("sp1", MODE_PRIVATE).edit()
-                .putString("default_voice_Vietnamese", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName)
-                .apply();
+        // TtsDefaultHelper initializes Diem Trinh only when no Vietnamese default exists.
+        // This keeps the bundled voice on the main path without overwriting a later explicit
+        // choice of another manually-installed Vietnamese voice.
         TtsDefaultHelper.syncDefaultVoices(this);
 
         refreshVoiceListUi();
