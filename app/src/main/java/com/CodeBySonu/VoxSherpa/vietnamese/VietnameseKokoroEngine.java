@@ -36,6 +36,7 @@ public final class VietnameseKokoroEngine {
     private static final String APP_PREFS = "sp3";
     private static final String PREF_CPU_THREADS = "cpu_threads";
     private static final String PREF_NNAPI_ENABLED = "nnapi_enabled";
+    private static final String WARMUP_TEXT = "Giọng nói chính.";
     private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.!?…]+(?:[\\\"”’)]*)");
     private static final Pattern EFFECT_TOKEN = Pattern.compile("(\\[[a-zA-Z]+\\]|\\.\\.\\.|[.,!?।])");
     private static final Pattern WORD_TOKEN = Pattern.compile("^[A-Za-zÀ-ỹĐđ]+(?:[-'][A-Za-zÀ-ỹĐđ]+)*$");
@@ -59,7 +60,7 @@ public final class VietnameseKokoroEngine {
     private volatile boolean modelReady;
     private volatile boolean modelWarm;
     private volatile boolean activeNnapi;
-    private volatile int activeCpuThreads = 4;
+    private volatile int activeCpuThreads = 0;
     private Map<Character, Long> vocab = new HashMap<>();
     private final LinkedHashMap<String, float[]> voiceStyleCache =
             new LinkedHashMap<String, float[]>(4, 0.75f, true) {
@@ -134,13 +135,13 @@ public final class VietnameseKokoroEngine {
 
     public String performanceState(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
-        int saved = prefs.getInt(PREF_CPU_THREADS, 4);
+        int saved = prefs.getInt(PREF_CPU_THREADS, 0);
         boolean nnapiRequested = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         synchronized (this) {
             return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm
                     + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")
                     + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads
-                    + ", savedCpuThreads=" + saved + " (0=ORT default)"
+                    + ", savedCpuThreads=" + saved + " (0=ORT default/auto-affinity)"
                     + ", cachedVoiceStyles=" + voiceStyleCache.size();
         }
     }
@@ -175,13 +176,23 @@ public final class VietnameseKokoroEngine {
     private synchronized void prewarmBlocking(Context context, String reason) throws Exception {
         prepare(context);
         if (modelWarm) return;
+        if (!warmCurrentSession(context, "prewarm:" + reason)) {
+            TtsDiagnostics.warn(context, "prewarm", "warmup_interrupted",
+                    "reason=" + reason + ", session remains usable; the first successful real request will confirm warm state.");
+        }
+    }
+
+    private boolean warmCurrentSession(Context context, String purpose) throws Exception {
         long started = System.nanoTime();
-        float[] audio = synthesizeChunk("xin", VietnameseKokoroVoice.DEFAULT, 1.0f, "prewarm");
-        modelWarm = audio != null && audio.length > 0;
-        TtsDiagnostics.info(context, "prewarm", "tiny_inference",
-                "reason=" + reason + ", voice=" + VietnameseKokoroVoice.DEFAULT.id
+        float[] audio = synthesizeChunk(WARMUP_TEXT, VietnameseKokoroVoice.DEFAULT, 1.0f, purpose);
+        boolean warmed = audio != null && audio.length > 0;
+        if (warmed) modelWarm = true;
+        TtsDiagnostics.info(context, "prewarm", "representative_inference",
+                "purpose=" + purpose + ", voice=" + VietnameseKokoroVoice.DEFAULT.id
+                        + ", textChars=" + WARMUP_TEXT.length()
                         + ", audioSamples=" + (audio == null ? 0 : audio.length)
-                        + ", elapsedMs=" + elapsedMs(started));
+                        + ", warmed=" + warmed + ", elapsedMs=" + elapsedMs(started));
+        return warmed;
     }
 
     public void cancel() {
@@ -213,9 +224,8 @@ public final class VietnameseKokoroEngine {
         activeNnapi = false;
 
         prepare(app);
-        if (!modelWarm) {
-            float[] audio = synthesizeChunk("xin", VietnameseKokoroVoice.DEFAULT, 1.0f, "provider_switch");
-            modelWarm = audio != null && audio.length > 0;
+        if (!modelWarm && !warmCurrentSession(app, "provider_switch")) {
+            throw new IllegalStateException("Vietnamese Kokoro provider warm-up was interrupted.");
         }
 
         boolean active = activeNnapi;
@@ -509,29 +519,40 @@ public final class VietnameseKokoroEngine {
         SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
         boolean restoreNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         TtsDiagnostics.info(app, "benchmark", "cpu_start",
-                "Testing ORT default/3/4/5/6 CPU threads with 2 warmups + 5 measured runs each; TTS requests may block during this benchmark.");
+                "Testing ORT default/3/4/6 across short/medium TalkBack workloads; "
+                        + "1 warmup + 2 measured runs per workload. TTS requests may briefly block during this benchmark.");
         prepare(app);
-        String phonemes = phonemize("xin chào");
+        String phonemes = phonemize(WARMUP_TEXT);
         long[] ids = tokenIds(phonemes);
         float[] style = selectStyle(VietnameseKokoroVoice.DEFAULT, phonemes.length());
-        String json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 2, 5);
+        String json;
+        try {
+            json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 1, 2);
+        } catch (Exception e) {
+            modelReady = false;
+            modelWarm = false;
+            activeNnapi = false;
+            throw e;
+        }
         JSONObject result = new JSONObject(json);
         int best = result.getInt("bestThreads");
         prefs.edit().putInt(PREF_CPU_THREADS, best).apply();
         activeCpuThreads = best;
         modelReady = true;
-        modelWarm = true;
+        modelWarm = false;
         activeNnapi = false;
 
         if (restoreNnapi) {
             nativeBridge.destroyEngine();
             modelReady = false;
             modelWarm = false;
+            activeNnapi = false;
             prepare(app);
-            if (!modelWarm) {
-                float[] warm = synthesizeChunk("xin", VietnameseKokoroVoice.DEFAULT, 1.0f, "benchmark_restore");
-                modelWarm = warm != null && warm.length > 0;
+            if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_nnapi")) {
+                throw new IllegalStateException("Vietnamese Kokoro benchmark restore warm-up was interrupted.");
             }
+        } else if (!warmCurrentSession(app, "benchmark_selected_cpu")) {
+            throw new IllegalStateException("Vietnamese Kokoro selected CPU session warm-up was interrupted.");
         }
 
         TtsDiagnostics.info(app, "benchmark", "cpu_complete",
@@ -564,7 +585,7 @@ public final class VietnameseKokoroEngine {
         if (!modelReady) {
             long started = System.nanoTime();
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
-            activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 4);
+            activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 0);
             boolean requestedNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
             modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);
             if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");
@@ -620,6 +641,14 @@ public final class VietnameseKokoroEngine {
         long nativeStart = System.nanoTime();
         float[] audio = nativeBridge.synthesize(ids, style, safeSpeed);
         long nativeCallMs = elapsedMs(nativeStart);
+        if (audio != null && audio.length > 0 && !modelWarm) {
+            modelWarm = true;
+            if (appContext != null) {
+                TtsDiagnostics.info(appContext, "prewarm", "session_confirmed_warm",
+                        "purpose=" + purpose + ", tokenIds=" + ids.length
+                                + ", nativeCallMs=" + nativeCallMs);
+            }
+        }
         long[] nativeTiming = nativeBridge.getLastInferenceTimingMicros();
         String nativeProfile = "";
         if (nativeTiming != null && nativeTiming.length >= 6) {

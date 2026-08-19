@@ -143,7 +143,7 @@ public class TtsDiagnosticsActivity extends Activity {
         nnapi.setEnabled(false);
         benchmark.setText("CPU benchmark running…");
         TtsDiagnostics.info(this, "benchmark", "ui_requested",
-                "User started default/3/4/5/6 CPU benchmark with 2 warmups + 5 measured runs per mode.");
+                "User started lightweight ORT default/3/4/6 CPU benchmark across short/medium TalkBack workloads.");
         new Thread(() -> {
             try {
                 VietnameseKokoroEngine.getInstance().benchmarkCpuThreads(this);
