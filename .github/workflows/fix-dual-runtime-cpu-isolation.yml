@@ -1,0 +1,37 @@
+name: Fix dual runtime CPU isolation
+
+on:
+  push:
+    branches:
+      - agent/qnn-gpu-experiment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix dual runtime CPU isolation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/qnn-gpu-experiment
+          fetch-depth: 0
+      - name: Force pure CPU mode in dual-runtime build
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroEngine.java')
+          s = p.read_text()
+          old = '            boolean requestedNnapi = !requestedQnnGpu && prefs.getBoolean(PREF_NNAPI_ENABLED, false);\n'
+          new = '            boolean requestedNnapi = !BuildConfig.KOKORO_QNN_GPU_DEFAULT && !requestedQnnGpu\n                    && prefs.getBoolean(PREF_NNAPI_ENABLED, false);\n'
+          assert old in s
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroEngine.java
+          git diff --cached --check
+          git commit -m 'Fix dual runtime CPU isolation'
+          git push origin HEAD:agent/qnn-gpu-experiment
