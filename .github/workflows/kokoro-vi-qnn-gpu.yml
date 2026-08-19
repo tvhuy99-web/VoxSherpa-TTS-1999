@@ -1,4 +1,4 @@
-name: Kokoro Vietnamese QNN GPU Experiment
+name: Kokoro Vietnamese ORT 1.26 CPU vs QNN GPU A/B
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build-qnn-gpu:
-    name: Build QNN GPU ORT 1.26.0
+    name: Build dual runtime ORT 1.26.0 A/B APK
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -61,15 +61,15 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 
-      - name: Prepare Kokoro + ORT QNN GPU runtime
+      - name: Prepare Kokoro + ORT QNN runtime
         env:
           ORT_QNN_VERSION: '1.26.0'
           QNN_RUNTIME_VERSION: '2.42.0'
         run: bash ./scripts/prepare_kokoro_vi_qnn_gpu.sh
 
-      - name: Build ARM64 QNN GPU experiment APK
+      - name: Build ARM64 dual runtime A/B APK
         env:
-          VOX_VERSION_NAME: '4.1.3-qnn-gpu'
+          VOX_VERSION_NAME: '4.1.3-ort126-ab'
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
@@ -77,7 +77,7 @@ jobs:
             -PkokoroViQnnGpu=true \
             --no-daemon -x test -x lint
 
-      - name: Verify QNN GPU APK linkage and payload
+      - name: Verify dual runtime APK linkage and payload
         shell: bash
         run: |
           set -euo pipefail
@@ -103,14 +103,14 @@ jobs:
           count=$(unzip -l "$APK" | grep -c 'assets/kokoro_vi/voicepacks/.*\.f32le')
           test "$count" -eq 14 || { echo "Expected 14 Vietnamese voicepacks, found $count" >&2; exit 1; }
           if unzip -l "$APK" | grep -F 'lib/x86_64/' ; then
-            echo 'ERROR: QNN experiment APK unexpectedly contains x86_64 native libraries.' >&2
+            echo 'ERROR: dual runtime experiment APK unexpectedly contains x86_64 native libraries.' >&2
             exit 1
           fi
 
-      - name: Upload QNN GPU experiment APK
+      - name: Upload dual runtime A/B APK
         uses: actions/upload-artifact@v4
         with:
-          name: VoxSherpa-Kokoro-Vietnamese-QNN-GPU-ORT-1.26.0
+          name: VoxSherpa-Kokoro-Vietnamese-ORT-1.26.0-CPU-QNN-GPU-AB
           path: app/build/outputs/apk/release/*.apk
           retention-days: 7
           if-no-files-found: error
