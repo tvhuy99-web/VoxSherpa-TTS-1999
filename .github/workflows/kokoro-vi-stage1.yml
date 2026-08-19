@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - agent/kokoro-vietnamese-integration
+      - main
   pull_request:
     branches:
       - main
