@@ -42,24 +42,27 @@
             </intent-filter>
         </activity>
 
+        <!-- Keep the legacy Activity as a real component so explicit app/OEM launches
+             can never fail on activity-alias resolution. The app's Setup button and
+             Android TTS metadata route directly to VietnameseTtssettingsActivity. -->
         <activity
-            android:name=".VietnameseTtssettingsActivity"
+            android:name=".TtssettingsActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:hardwareAccelerated="true"
             android:supportsPictureInPicture="true"
             android:exported="true" />
 
-        <!-- Keep the legacy component name working, but always launch the
-             Vietnamese-aware settings screen so bundled voices are visible. -->
-        <activity-alias
-            android:name=".TtssettingsActivity"
-            android:targetActivity=".VietnameseTtssettingsActivity"
+        <activity
+            android:name=".VietnameseTtssettingsActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:hardwareAccelerated="true"
+            android:supportsPictureInPicture="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.speech.tts.engine.INSTALL_TTS_DATA" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
 
         <activity
             android:name=".system.TtsDiagnosticsActivity"
