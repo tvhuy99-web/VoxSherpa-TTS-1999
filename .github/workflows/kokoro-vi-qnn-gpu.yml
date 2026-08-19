@@ -65,7 +65,7 @@ jobs:
         env:
           ORT_QNN_VERSION: '1.26.0'
           QNN_RUNTIME_VERSION: '2.42.0'
-        run: ./scripts/prepare_kokoro_vi_qnn_gpu.sh
+        run: bash ./scripts/prepare_kokoro_vi_qnn_gpu.sh
 
       - name: Build ARM64 QNN GPU experiment APK
         env:
