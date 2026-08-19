@@ -15,6 +15,7 @@ public class TtsDefaultHelper {
     private static final String VI_LANGUAGE_NAME = "Vietnamese";
     private static final String VI_DEFAULT_KEY = "default_voice_" + VI_LANGUAGE_NAME;
     private static final String VI_SYS_KEY = "sys_tts_" + VI_LANGUAGE_NAME;
+    private static final String CPU_AUTO_AFFINITY_MIGRATION = "cpu_default_auto_affinity_v1";
     /** Bump when the bundled voice inventory changes so Android refreshes its cached voice list. */
     private static final String VI_ANNOUNCED_KEY = "kokoro_vi_data_announced_v3_14voices";
 
@@ -32,10 +33,20 @@ public class TtsDefaultHelper {
         boolean announceVietnamese = false;
 
         try {
-            if (!perf.contains("cpu_threads")) {
-                perf.edit().putInt("cpu_threads", 4).apply();
+            if (!perf.getBoolean(CPU_AUTO_AFFINITY_MIGRATION, false)) {
+                boolean hadCpuSetting = perf.contains("cpu_threads");
+                int previousThreads = perf.getInt("cpu_threads", 4);
+                SharedPreferences.Editor perfEditor = perf.edit()
+                        .putBoolean(CPU_AUTO_AFFINITY_MIGRATION, true);
+                if (!hadCpuSetting || previousThreads == 4) {
+                    perfEditor.putInt("cpu_threads", 0);
+                }
+                perfEditor.apply();
                 TtsDiagnostics.info(app, "defaults", "cpu_default_initialized",
-                        "Initialized bundled Vietnamese ORT default to 4 threads; benchmark may override it.");
+                        "Initialized bundled Vietnamese CPU policy to ORT default/auto-affinity; previousThreads="
+                                + (hadCpuSetting ? previousThreads : -1)
+                                + ", activePreference=" + perf.getInt("cpu_threads", 0)
+                                + ". A completed benchmark may override it.");
             }
 
             SharedPreferences.Editor sp1Editor = sp1.edit();
