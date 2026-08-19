@@ -1,0 +1,116 @@
+name: Kokoro Vietnamese QNN GPU Experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/qnn-gpu-experiment
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kokoro-vi-qnn-gpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-qnn-gpu:
+    name: Build QNN GPU ORT 1.26.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install voicepack conversion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust Android target
+        run: rustup target add aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Prepare Kokoro + ORT QNN GPU runtime
+        env:
+          ORT_QNN_VERSION: '1.26.0'
+          QNN_RUNTIME_VERSION: '2.42.0'
+        run: ./scripts/prepare_kokoro_vi_qnn_gpu.sh
+
+      - name: Build ARM64 QNN GPU experiment APK
+        env:
+          VOX_VERSION_NAME: '4.1.3-qnn-gpu'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease \
+            -PkokoroViStage1=true \
+            -PkokoroViQnnGpu=true \
+            --no-daemon -x test -x lint
+
+      - name: Verify QNN GPU APK linkage and payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          rm -rf "$RUNNER_TEMP/qnn-apk-check"
+          mkdir -p "$RUNNER_TEMP/qnn-apk-check"
+          unzip -q "$APK" 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so' -d "$RUNNER_TEMP/qnn-apk-check"
+          NEEDED=$(readelf -d "$RUNNER_TEMP/qnn-apk-check/lib/arm64-v8a/libvoxsherpa_kokoro_vi.so")
+          echo "$NEEDED"
+          echo "$NEEDED" | grep -F 'Shared library: [libsea_g2p_android.so]'
+          echo "$NEEDED" | grep -F 'Shared library: [libonnxruntime.so]'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libonnxruntime.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libQnnGpu.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libQnnSystem.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libsea_g2p_android.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so'
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/kokoro_vi.onnx'
+          voices=(diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy)
+          for voice in "${voices[@]}"; do
+            unzip -l "$APK" | grep -F "assets/kokoro_vi/voicepacks/${voice}.f32le"
+          done
+          count=$(unzip -l "$APK" | grep -c 'assets/kokoro_vi/voicepacks/.*\.f32le')
+          test "$count" -eq 14 || { echo "Expected 14 Vietnamese voicepacks, found $count" >&2; exit 1; }
+          if unzip -l "$APK" | grep -F 'lib/x86_64/' ; then
+            echo 'ERROR: QNN experiment APK unexpectedly contains x86_64 native libraries.' >&2
+            exit 1
+          fi
+
+      - name: Upload QNN GPU experiment APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-Vietnamese-QNN-GPU-ORT-1.26.0
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
+          if-no-files-found: error
