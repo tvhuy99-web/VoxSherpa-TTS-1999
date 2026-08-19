@@ -301,7 +301,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vietn
     std::lock_guard<std::mutex> lock(g_mutex);
     g_session.reset();
     g_active_nnapi.store(false, std::memory_order_release);
-        g_active_qnn_gpu.store(false, std::memory_order_release);
+    g_active_qnn_gpu.store(false, std::memory_order_release);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_cancelActiveRun(JNIEnv*, jobject) {

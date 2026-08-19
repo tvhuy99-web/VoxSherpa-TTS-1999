@@ -549,7 +549,7 @@ public final class VietnameseKokoroEngine {
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
-        activeQnnGpu = false;
+            activeQnnGpu = false;
             throw e;
         }
         JSONObject result = new JSONObject(json);
@@ -566,9 +566,9 @@ public final class VietnameseKokoroEngine {
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
-        activeQnnGpu = false;
+            activeQnnGpu = false;
             prepare(app);
-            if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_nnapi")) {
+            if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_accelerator")) {
                 throw new IllegalStateException("Vietnamese Kokoro benchmark restore warm-up was interrupted.");
             }
         } else if (!warmCurrentSession(app, "benchmark_selected_cpu")) {
