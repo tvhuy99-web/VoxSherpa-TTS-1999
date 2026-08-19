@@ -7,6 +7,7 @@ import android.speech.tts.SynthesisRequest;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
 
+import com.CodeBySonu.VoxSherpa.Sonic;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
@@ -181,7 +182,7 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                         + ", lang=" + request.getLanguage() + ", country=" + request.getCountry()
                         + ", voice=" + request.getVoiceName()
                         + (selectedVoice == null ? "" : ", resolvedVoice=" + selectedVoice.id)
-                        + ", rate=" + request.getSpeechRate()
+                        + ", rate=" + request.getSpeechRate() + ", pitch=" + request.getPitch()
                         + ", chars=" + (chars == null ? 0 : chars.length()) + ", text=" + previewText
                         + (useVietnamese ? ", perf={" + VietnameseKokoroEngine.getInstance().performanceState(this) + "}" : ""));
 
@@ -222,9 +223,8 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 "id=" + requestId + ", voice=" + synthesisVoice.id
                         + ", requestToCallbackStartMs=" + callbackStartedMs);
 
-        final float speed = request.getSpeechRate() > 0
-                ? request.getSpeechRate() / 100.0f
-                : 1.0f;
+        final float speed = request.getSpeechRate() > 0 ? request.getSpeechRate() / 100.0f : 1.0f;
+        final float systemPitch = request.getPitch() > 0 ? request.getPitch() / 100.0f : 1.0f;
         final int maxBuffer = Math.max(1024, callback.getMaxBufferSize());
         final boolean[] writeFailed = {false};
         final boolean[] firstAudioAccepted = {false};
@@ -237,18 +237,20 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 synthesisVoice,
                 speed,
                 pcm -> {
+                    byte[] outputPcm = applySystemPitch(pcm, systemPitch);
                     if (firstPcmCallbackMs[0] < 0) {
                         firstPcmCallbackMs[0] = elapsedMs(startedAt);
                         TtsDiagnostics.info(this, "latency", "first_pcm_callback",
                                 "id=" + requestId + ", voice=" + synthesisVoice.id
                                         + ", requestToFirstPcmCallbackMs=" + firstPcmCallbackMs[0]
-                                        + ", pcmBytes=" + pcm.length + ", maxBuffer=" + maxBuffer);
+                                        + ", pcmBytes=" + outputPcm.length + ", maxBuffer=" + maxBuffer
+                                        + ", systemPitch=" + systemPitch);
                     }
-                    for (int offset = 0; offset < pcm.length; offset += maxBuffer) {
+                    for (int offset = 0; offset < outputPcm.length; offset += maxBuffer) {
                         if (vietnameseCancelled) return false;
-                        int count = Math.min(maxBuffer, pcm.length - offset);
+                        int count = Math.min(maxBuffer, outputPcm.length - offset);
                         long writeStart = System.nanoTime();
-                        int writeStatus = callback.audioAvailable(pcm, offset, count);
+                        int writeStatus = callback.audioAvailable(outputPcm, offset, count);
                         long writeUs = (System.nanoTime() - writeStart) / 1_000L;
                         if (writeStatus != TextToSpeech.SUCCESS) {
                             writeFailed[0] = true;
@@ -294,6 +296,37 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 "id=" + requestId + ", voice=" + synthesisVoice.id
                         + ", elapsedMs=" + elapsedMs + ", pcmBytes=" + pcmBytes[0]
                         + ", timeToFirstAudioMs=" + (firstAudioAccepted[0] ? firstPcmCallbackMs[0] : -1));
+    }
+
+    private static byte[] applySystemPitch(byte[] pcm, float pitch) {
+        if (pcm == null || pcm.length < 2 || Math.abs(pitch - 1.0f) < 0.001f) return pcm;
+        float safePitch = Math.max(0.25f, Math.min(2.0f, pitch));
+        try {
+            int count = pcm.length / 2;
+            short[] input = new short[count];
+            for (int i = 0; i < count; i++) {
+                int lo = pcm[i * 2] & 0xff;
+                int hi = pcm[i * 2 + 1] << 8;
+                input[i] = (short) (lo | hi);
+            }
+            Sonic sonic = new Sonic(VietnameseKokoroEngine.SAMPLE_RATE, 1);
+            sonic.setPitch(safePitch);
+            sonic.writeShortToStream(input, input.length);
+            sonic.flushStream();
+            int available = sonic.samplesAvailable();
+            if (available <= 0) return pcm;
+            short[] output = new short[available];
+            int read = sonic.readShortFromStream(output, available);
+            if (read <= 0) return pcm;
+            byte[] result = new byte[read * 2];
+            for (int i = 0; i < read; i++) {
+                result[i * 2] = (byte) (output[i] & 0xff);
+                result[i * 2 + 1] = (byte) ((output[i] >>> 8) & 0xff);
+            }
+            return result;
+        } catch (Throwable ignored) {
+            return pcm;
+        }
     }
 
     private VietnameseKokoroVoice resolveRequestVoice(SynthesisRequest request) {
