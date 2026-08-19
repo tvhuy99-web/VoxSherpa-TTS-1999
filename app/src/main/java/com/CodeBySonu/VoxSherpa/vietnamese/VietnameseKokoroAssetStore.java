@@ -15,11 +15,11 @@ public final class VietnameseKokoroAssetStore {
     private static final String MODEL = ROOT + "/kokoro_vi.onnx";
     private static final String DICTIONARY = ROOT + "/sea_g2p.bin";
     private static final String CONFIG = ROOT + "/config.json";
+    private static volatile Boolean bundledCache;
 
     public static final class Paths {
         public final File model;
         public final File dictionary;
-        /** Default voicepack copied during initial prepare so prewarm never waits on a later copy. */
         public final File voicepack;
 
         private Paths(File model, File dictionary, File voicepack) {
@@ -33,25 +33,37 @@ public final class VietnameseKokoroAssetStore {
 
     public static boolean isBundled(Context context) {
         if (context == null) return false;
-        boolean nativeAvailable = VietnameseKokoroNative.isAvailable();
-        boolean assets = assetExists(context, MODEL)
-                && assetExists(context, DICTIONARY)
-                && assetExists(context, CONFIG);
-        if (assets) {
-            for (VietnameseKokoroVoice voice : VietnameseKokoroVoice.all()) {
-                if (!assetExists(context, voice.assetPath)) {
-                    assets = false;
-                    break;
+        Boolean cached = bundledCache;
+        if (cached != null) return cached;
+        synchronized (VietnameseKokoroAssetStore.class) {
+            cached = bundledCache;
+            if (cached != null) return cached;
+            boolean nativeAvailable = VietnameseKokoroNative.isAvailable();
+            boolean assets = assetExists(context, MODEL)
+                    && assetExists(context, DICTIONARY)
+                    && assetExists(context, CONFIG);
+            if (assets) {
+                for (VietnameseKokoroVoice voice : VietnameseKokoroVoice.all()) {
+                    if (!assetExists(context, voice.assetPath)) {
+                        assets = false;
+                        break;
+                    }
                 }
             }
+            boolean result = nativeAvailable && assets;
+            bundledCache = result;
+            if (!result) {
+                TtsDiagnostics.warn(context, "assets", "bundle_probe_failed",
+                        "nativeAvailable=" + nativeAvailable + ", assetsPresent=" + assets
+                                + ", expectedVoices=" + VietnameseKokoroVoice.all().size()
+                                + ", nativeError=" + VietnameseKokoroNative.loadError());
+            } else {
+                TtsDiagnostics.info(context, "assets", "bundle_probe_cached",
+                        "Verified immutable bundled inventory once; voices="
+                                + VietnameseKokoroVoice.all().size());
+            }
+            return result;
         }
-        if (!nativeAvailable || !assets) {
-            TtsDiagnostics.warn(context, "assets", "bundle_probe_failed",
-                    "nativeAvailable=" + nativeAvailable + ", assetsPresent=" + assets
-                            + ", expectedVoices=" + VietnameseKokoroVoice.all().size()
-                            + ", nativeError=" + VietnameseKokoroNative.loadError());
-        }
-        return nativeAvailable && assets;
     }
 
     public static synchronized Paths ensure(Context context) throws Exception {
