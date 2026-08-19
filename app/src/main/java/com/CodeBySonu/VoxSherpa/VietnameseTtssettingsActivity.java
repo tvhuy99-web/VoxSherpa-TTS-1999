@@ -15,15 +15,18 @@ import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-/** Adds the bundled Vietnamese voice and diagnostics entry to VoxSherpa's TTS settings UI. */
+/** Adds bundled Vietnamese voices and diagnostics to VoxSherpa's TTS settings UI. */
 public class VietnameseTtssettingsActivity extends TtssettingsActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        TtsDiagnostics.info(this, "settings", "vietnamese_settings_opened",
+                "Vietnamese-aware TTS settings screen opened.");
         injectBundledVietnameseVoice();
         installDiagnosticsMenu();
     }
 
+    @SuppressWarnings("unchecked")
     private void injectBundledVietnameseVoice() {
         boolean nativeAvailable = VietnameseKokoroNative.isAvailable();
         boolean bundled = VietnameseKokoroEngine.isBundled(this);
@@ -31,11 +34,55 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
                 "nativeAvailable=" + nativeAvailable + ", bundled=" + bundled
                         + ", loadError=" + VietnameseKokoroNative.loadError());
 
-        if (!bundled || groupedLanguageList == null) return;
+        if (!bundled || groupedLanguageList == null) {
+            TtsDiagnostics.warn(this, "settings", "vietnamese_voice_not_added",
+                    "Cannot add bundled Vietnamese voice. groupedLanguageList="
+                            + (groupedLanguageList != null) + ", bundled=" + bundled);
+            return;
+        }
 
+        HashMap<String, Object> vietnameseGroup = null;
         for (HashMap<String, Object> group : groupedLanguageList) {
             Object name = group.get("language_name");
-            if (name != null && "Vietnamese".equalsIgnoreCase(name.toString())) return;
+            if (name == null) continue;
+            String value = name.toString().trim();
+            if ("Vietnamese".equalsIgnoreCase(value)
+                    || "Tiếng Việt".equalsIgnoreCase(value)
+                    || value.toLowerCase(java.util.Locale.ROOT).contains("vietnamese")) {
+                vietnameseGroup = group;
+                break;
+            }
+        }
+
+        ArrayList<HashMap<String, Object>> voices;
+        if (vietnameseGroup == null) {
+            vietnameseGroup = new HashMap<>();
+            vietnameseGroup.put("language_name", "Vietnamese");
+            vietnameseGroup.put("is_expanded", "true");
+            voices = new ArrayList<>();
+            vietnameseGroup.put("voices", voices);
+            groupedLanguageList.add(0, vietnameseGroup);
+            TtsDiagnostics.info(this, "settings", "vietnamese_group_added",
+                    "Created Installed Languages group for Vietnamese.");
+        } else {
+            Object existingVoices = vietnameseGroup.get("voices");
+            if (existingVoices instanceof ArrayList) {
+                voices = (ArrayList<HashMap<String, Object>>) existingVoices;
+            } else {
+                voices = new ArrayList<>();
+                vietnameseGroup.put("voices", voices);
+            }
+            vietnameseGroup.put("is_expanded", "true");
+        }
+
+        for (HashMap<String, Object> existing : voices) {
+            Object id = existing.get("voice_id");
+            if (id != null && VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName.equals(id.toString())) {
+                refreshVoiceListUi();
+                TtsDiagnostics.info(this, "settings", "vietnamese_voice_already_present",
+                        "Bundled Diem Trinh voice already exists in Installed Languages.");
+                return;
+            }
         }
 
         HashMap<String, Object> voice = new HashMap<>();
@@ -49,16 +96,15 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         voice.put("tokens_path", "bundled://kokoro_vi/config.json");
         voice.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
         voice.put("speaker_id", "0");
+        voices.add(0, voice);
 
-        ArrayList<HashMap<String, Object>> voices = new ArrayList<>();
-        voices.add(voice);
+        refreshVoiceListUi();
+        TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
+                "Added " + VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName
+                        + " to Installed Languages; voiceCount=" + voices.size());
+    }
 
-        HashMap<String, Object> group = new HashMap<>();
-        group.put("language_name", "Vietnamese");
-        group.put("is_expanded", "true");
-        group.put("voices", voices);
-        groupedLanguageList.add(0, group);
-
+    private void refreshVoiceListUi() {
         int noModelId = getResources().getIdentifier("txt_no_model", "id", getPackageName());
         if (noModelId != 0) {
             TextView noModel = findViewById(noModelId);
@@ -73,8 +119,6 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
                 if (recycler.getAdapter() != null) recycler.getAdapter().notifyDataSetChanged();
             }
         }
-        TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
-                "Added " + VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName + " to settings UI.");
     }
 
     private void installDiagnosticsMenu() {
