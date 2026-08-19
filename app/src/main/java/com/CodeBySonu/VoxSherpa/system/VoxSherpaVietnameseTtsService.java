@@ -32,6 +32,8 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
         if (!nativeAvailable) {
             TtsDiagnostics.error(this, "native", "load_failed",
                     "Vietnamese JNI backend unavailable: " + VietnameseKokoroNative.loadError(), null);
+        } else if (bundled) {
+            VietnameseKokoroEngine.getInstance().prewarmAsync(this, "service_onCreate");
         }
     }
 
@@ -51,6 +53,17 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                             + ", superResult=" + result);
         }
         return result;
+    }
+
+    @Override
+    protected int onLoadLanguage(String lang, String country, String variant) {
+        if (isVietnameseLanguage(lang) && VietnameseKokoroEngine.isBundled(this)) {
+            TtsDiagnostics.info(this, "service", "language_load_requested",
+                    "lang=" + lang + ", country=" + country);
+            VietnameseKokoroEngine.getInstance().prewarmAsync(this, "onLoadLanguage");
+            return TextToSpeech.LANG_COUNTRY_AVAILABLE;
+        }
+        return super.onLoadLanguage(lang, country, variant);
     }
 
     @Override
@@ -117,7 +130,9 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
     public int onLoadVoice(String voiceName) {
         if (VietnameseKokoroEngine.isBundled(this)
                 && VietnameseKokoroVoice.fromAndroidVoiceName(voiceName) != null) {
-            TtsDiagnostics.info(this, "service", "voice_loaded", "voice=" + voiceName);
+            TtsDiagnostics.info(this, "service", "voice_loaded",
+                    "voice=" + voiceName + ", prewarmRequested=true");
+            VietnameseKokoroEngine.getInstance().prewarmAsync(this, "onLoadVoice");
             return TextToSpeech.SUCCESS;
         }
         if (voiceName != null && voiceName.contains("VoxSherpa_vi_")) {
@@ -140,9 +155,14 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
     @Override
     public void onDestroy() {
         vietnameseCancelled = true;
-        TtsDiagnostics.info(this, "service", "destroy", "TTS service is being destroyed.");
-        try { VietnameseKokoroEngine.getInstance().release(); }
-        catch (Throwable t) { TtsDiagnostics.error(this, "service", "release_failed", t.toString(), t); }
+        TtsDiagnostics.info(this, "service", "destroy",
+                "TTS service is being destroyed; Vietnamese model will remain hot while process lives.");
+        try {
+            VietnameseKokoroEngine.getInstance().cancel();
+            VietnameseKokoroEngine.getInstance().retainAcrossServiceDestroy(this);
+        } catch (Throwable t) {
+            TtsDiagnostics.error(this, "service", "retain_session_failed", t.toString(), t);
+        }
         super.onDestroy();
     }
 
@@ -158,7 +178,8 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 "id=" + requestId + ", route=" + (useVietnamese ? "kokoro_vi" : "base")
                         + ", lang=" + request.getLanguage() + ", country=" + request.getCountry()
                         + ", voice=" + request.getVoiceName() + ", rate=" + request.getSpeechRate()
-                        + ", chars=" + (chars == null ? 0 : chars.length()) + ", text=" + previewText);
+                        + ", chars=" + (chars == null ? 0 : chars.length()) + ", text=" + previewText
+                        + (useVietnamese ? ", perf={" + VietnameseKokoroEngine.getInstance().performanceState(this) + "}" : ""));
 
         if (!useVietnamese) {
             super.onSynthesizeText(request, callback);
@@ -184,19 +205,24 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 AudioFormat.ENCODING_PCM_16BIT,
                 1
         );
+        final long callbackStartedMs = elapsedMs(startedAt);
         if (startStatus != TextToSpeech.SUCCESS) {
             callback.error();
             TtsDiagnostics.warn(this, "synthesis", "callback_start_failed",
-                    "id=" + requestId + ", status=" + startStatus);
+                    "id=" + requestId + ", status=" + startStatus + ", requestToCallbackStartMs=" + callbackStartedMs);
             return;
         }
+        TtsDiagnostics.info(this, "latency", "callback_started",
+                "id=" + requestId + ", requestToCallbackStartMs=" + callbackStartedMs);
 
         final float speed = request.getSpeechRate() > 0
                 ? request.getSpeechRate() / 100.0f
                 : 1.0f;
         final int maxBuffer = Math.max(1024, callback.getMaxBufferSize());
         final boolean[] writeFailed = {false};
+        final boolean[] firstAudioAccepted = {false};
         final long[] pcmBytes = {0L};
+        final long[] firstPcmCallbackMs = {-1L};
 
         boolean emitted = VietnameseKokoroEngine.getInstance().synthesizeStreaming(
                 this,
@@ -204,25 +230,44 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
                 VietnameseKokoroVoice.DIEM_TRINH,
                 speed,
                 pcm -> {
+                    if (firstPcmCallbackMs[0] < 0) {
+                        firstPcmCallbackMs[0] = elapsedMs(startedAt);
+                        TtsDiagnostics.info(this, "latency", "first_pcm_callback",
+                                "id=" + requestId + ", requestToFirstPcmCallbackMs=" + firstPcmCallbackMs[0]
+                                        + ", pcmBytes=" + pcm.length + ", maxBuffer=" + maxBuffer);
+                    }
                     for (int offset = 0; offset < pcm.length; offset += maxBuffer) {
                         if (vietnameseCancelled) return false;
                         int count = Math.min(maxBuffer, pcm.length - offset);
-                        if (callback.audioAvailable(pcm, offset, count) != TextToSpeech.SUCCESS) {
+                        long writeStart = System.nanoTime();
+                        int writeStatus = callback.audioAvailable(pcm, offset, count);
+                        long writeUs = (System.nanoTime() - writeStart) / 1_000L;
+                        if (writeStatus != TextToSpeech.SUCCESS) {
                             writeFailed[0] = true;
                             TtsDiagnostics.warn(this, "synthesis", "audio_write_failed",
-                                    "id=" + requestId + ", offset=" + offset + ", count=" + count);
+                                    "id=" + requestId + ", offset=" + offset + ", count=" + count
+                                            + ", writeUs=" + writeUs);
                             return false;
                         }
                         pcmBytes[0] += count;
+                        if (!firstAudioAccepted[0]) {
+                            firstAudioAccepted[0] = true;
+                            TtsDiagnostics.info(this, "latency", "first_audio",
+                                    "id=" + requestId + ", timeToFirstAudioMs=" + elapsedMs(startedAt)
+                                            + ", callbackStartMs=" + callbackStartedMs
+                                            + ", firstPcmCallbackMs=" + firstPcmCallbackMs[0]
+                                            + ", firstWriteUs=" + writeUs + ", firstBufferBytes=" + count);
+                        }
                     }
                     return !vietnameseCancelled;
                 }
         );
 
-        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L;
+        long elapsedMs = elapsedMs(startedAt);
         if (vietnameseCancelled) {
             TtsDiagnostics.info(this, "synthesis", "cancelled",
-                    "id=" + requestId + ", elapsedMs=" + elapsedMs + ", pcmBytes=" + pcmBytes[0]);
+                    "id=" + requestId + ", elapsedMs=" + elapsedMs + ", pcmBytes=" + pcmBytes[0]
+                            + ", firstAudioMs=" + (firstAudioAccepted[0] ? firstPcmCallbackMs[0] : -1));
             return;
         }
         if (!emitted || writeFailed[0]) {
@@ -234,7 +279,8 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
         }
         callback.done();
         TtsDiagnostics.info(this, "synthesis", "done",
-                "id=" + requestId + ", elapsedMs=" + elapsedMs + ", pcmBytes=" + pcmBytes[0]);
+                "id=" + requestId + ", elapsedMs=" + elapsedMs + ", pcmBytes=" + pcmBytes[0]
+                        + ", timeToFirstAudioMs=" + (firstAudioAccepted[0] ? firstPcmCallbackMs[0] : -1));
     }
 
     private boolean shouldUseVietnamese(SynthesisRequest request) {
@@ -248,5 +294,9 @@ public class VoxSherpaVietnameseTtsService extends VoxSherpaTtsService {
         if (lang == null) return false;
         String value = lang.trim().toLowerCase(Locale.ROOT);
         return value.equals("vi") || value.equals("vie") || value.startsWith("vi-") || value.startsWith("vi_");
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000L;
     }
 }
