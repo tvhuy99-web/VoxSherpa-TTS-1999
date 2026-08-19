@@ -5,7 +5,9 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.PopupMenu;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.CodeBySonu.VoxSherpa.system.TtsDefaultHelper;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnosticsActivity;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
@@ -15,14 +17,25 @@ import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-/** Adds bundled Vietnamese voices and diagnostics to VoxSherpa's TTS settings UI. */
+/** Unified TTS settings screen: downloaded voices and bundled Vietnamese use the same selection path. */
 public class VietnameseTtssettingsActivity extends TtssettingsActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        TtsDefaultHelper.syncDefaultVoices(this);
+        VietnameseKokoroEngine.getInstance().prewarmAsync(this, "vietnamese_settings_opened");
+
         TtsDiagnostics.info(this, "settings", "vietnamese_settings_opened",
-                "Vietnamese-aware TTS settings screen opened.");
+                "Unified Vietnamese-aware TTS settings screen opened; primary defaults synchronized and prewarm requested.");
+
         injectBundledVietnameseVoice();
+        // Re-assert after layout/adapter work to make OEM timing or generated UI code harmless.
+        View content = findViewById(android.R.id.content);
+        if (content != null) {
+            content.post(this::injectBundledVietnameseVoice);
+            content.postDelayed(this::injectBundledVietnameseVoice, 250L);
+        }
         installDiagnosticsMenu();
     }
 
@@ -32,14 +45,17 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         boolean bundled = VietnameseKokoroEngine.isBundled(this);
         TtsDiagnostics.info(this, "settings", "vietnamese_voice_probe",
                 "nativeAvailable=" + nativeAvailable + ", bundled=" + bundled
+                        + ", groupedLanguageList=" + (groupedLanguageList != null)
                         + ", loadError=" + VietnameseKokoroNative.loadError());
 
-        if (!bundled || groupedLanguageList == null) {
+        if (!bundled || !nativeAvailable) {
             TtsDiagnostics.warn(this, "settings", "vietnamese_voice_not_added",
-                    "Cannot add bundled Vietnamese voice. groupedLanguageList="
-                            + (groupedLanguageList != null) + ", bundled=" + bundled);
+                    "Bundled Vietnamese unavailable; nativeAvailable=" + nativeAvailable
+                            + ", bundled=" + bundled);
             return;
         }
+
+        if (groupedLanguageList == null) groupedLanguageList = new ArrayList<>();
 
         HashMap<String, Object> vietnameseGroup = null;
         for (HashMap<String, Object> group : groupedLanguageList) {
@@ -63,7 +79,7 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             vietnameseGroup.put("voices", voices);
             groupedLanguageList.add(0, vietnameseGroup);
             TtsDiagnostics.info(this, "settings", "vietnamese_group_added",
-                    "Created Installed Languages group for Vietnamese.");
+                    "Created first-class Installed Languages group for bundled Vietnamese.");
         } else {
             Object existingVoices = vietnameseGroup.get("voices");
             if (existingVoices instanceof ArrayList) {
@@ -75,20 +91,26 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             vietnameseGroup.put("is_expanded", "true");
         }
 
+        HashMap<String, Object> voice = null;
         for (HashMap<String, Object> existing : voices) {
             Object id = existing.get("voice_id");
             if (id != null && VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName.equals(id.toString())) {
-                refreshVoiceListUi();
-                TtsDiagnostics.info(this, "settings", "vietnamese_voice_already_present",
-                        "Bundled Diem Trinh voice already exists in Installed Languages.");
-                return;
+                voice = existing;
+                break;
             }
         }
 
-        HashMap<String, Object> voice = new HashMap<>();
+        if (voice == null) {
+            voice = new HashMap<>();
+            voices.add(0, voice);
+            TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
+                    "Added bundled Diem Trinh to the primary Installed Languages list.");
+        }
+
+        // Use exactly the same keys consumed by the existing TTS settings adapter/sp5 path.
         voice.put("voice_id", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
         voice.put("display_name", VietnameseKokoroVoice.DIEM_TRINH.displayName);
-        voice.put("subtitle", "Bundled Kokoro Vietnamese • Offline • Stage 1");
+        voice.put("subtitle", "Bundled Kokoro Vietnamese • Offline • Installed");
         voice.put("is_kokoro", "true");
         voice.put("sample_url", "");
         voice.put("model_type", "kokoro_vi");
@@ -96,12 +118,15 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         voice.put("tokens_path", "bundled://kokoro_vi/config.json");
         voice.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
         voice.put("speaker_id", "0");
-        voices.add(0, voice);
+
+        getSharedPreferences("sp1", MODE_PRIVATE).edit()
+                .putString("default_voice_Vietnamese", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName)
+                .apply();
+        TtsDefaultHelper.syncDefaultVoices(this);
 
         refreshVoiceListUi();
-        TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
-                "Added " + VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName
-                        + " to Installed Languages; voiceCount=" + voices.size());
+        TtsDiagnostics.info(this, "settings", "vietnamese_voice_visible",
+                "Unified list now contains Vietnamese group with voiceCount=" + voices.size());
     }
 
     private void refreshVoiceListUi() {
@@ -117,6 +142,9 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             if (recycler != null) {
                 recycler.setVisibility(View.VISIBLE);
                 if (recycler.getAdapter() != null) recycler.getAdapter().notifyDataSetChanged();
+                TtsDiagnostics.info(this, "settings", "voice_list_refreshed",
+                        "adapter=" + (recycler.getAdapter() != null)
+                                + ", groups=" + (groupedLanguageList == null ? -1 : groupedLanguageList.size()));
             }
         }
     }
@@ -132,12 +160,7 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             popup.getMenu().add(0, 2, 1, "TTS Diagnostics");
             popup.setOnMenuItemClickListener(item -> {
                 if (item.getItemId() == 1) {
-                    try {
-                        Intent intent = new Intent("com.android.settings.TTS_SETTINGS");
-                        startActivity(intent);
-                    } catch (Throwable t) {
-                        TtsDiagnostics.error(this, "settings", "open_system_tts_failed", t.toString(), t);
-                    }
+                    openSystemTtsAfterWarmup();
                     return true;
                 }
                 if (item.getItemId() == 2) {
@@ -148,5 +171,48 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             });
             popup.show();
         });
+    }
+
+    private void openSystemTtsAfterWarmup() {
+        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();
+        if (engine.isReady()) {
+            openSystemTtsSettings();
+            return;
+        }
+
+        Toast.makeText(this,
+                "Preparing Vietnamese voice for TalkBack… System TTS will open when ready.",
+                Toast.LENGTH_LONG).show();
+        TtsDiagnostics.info(this, "settings", "system_tts_waiting_for_warmup",
+                "Delaying System TTS navigation until bundled Vietnamese is warm to avoid first TalkBack silence.");
+        engine.prewarmAsync(this, "before_system_tts_settings");
+
+        new Thread(() -> {
+            long deadline = android.os.SystemClock.elapsedRealtime() + 35000L;
+            while (!engine.isReady() && android.os.SystemClock.elapsedRealtime() < deadline) {
+                try {
+                    Thread.sleep(100L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            boolean ready = engine.isReady();
+            runOnUiThread(() -> {
+                TtsDiagnostics.info(this, "settings", "system_tts_warmup_gate_finished",
+                        "ready=" + ready + ", " + engine.performanceState(this));
+                openSystemTtsSettings();
+            });
+        }, "KokoroVi-SystemTtsGate").start();
+    }
+
+    private void openSystemTtsSettings() {
+        try {
+            Intent intent = new Intent("com.android.settings.TTS_SETTINGS");
+            startActivity(intent);
+        } catch (Throwable t) {
+            TtsDiagnostics.error(this, "settings", "open_system_tts_failed", t.toString(), t);
+            Toast.makeText(this, "Unable to open System TTS Settings.", Toast.LENGTH_SHORT).show();
+        }
     }
 }
