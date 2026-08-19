@@ -2,6 +2,7 @@ package com.CodeBySonu.VoxSherpa;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -21,6 +22,7 @@ import android.widget.TextView;
 
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnosticsActivity;
+import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
 import com.google.android.material.card.MaterialCardView;
 
 import java.util.WeakHashMap;
@@ -55,11 +57,26 @@ public class SketchApplication extends Application {
         installDiagnosticsShortcut();
     }
 
-    /**
-     * Keeps a directly accessible TTS Logs button beside the existing Clear All Cache button.
-     * The Settings screen is a Fragment inside MainActivity, so the watcher waits until that
-     * Fragment view exists and then performs the one-time layout upgrade for that view instance.
-     */
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        TtsDiagnostics.info(this, "memory", "trim",
+                "level=" + level + ", kokoro={" + VietnameseKokoroEngine.getInstance().performanceState(this) + "}");
+        // UI_HIDDEN (20) is normal and must NOT unload the model. Release only for
+        // explicit running-critical pressure or background pressure levels >= 40.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
+                || level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            VietnameseKokoroEngine.getInstance().releaseForMemoryPressure(
+                    this, "onTrimMemory level=" + level);
+        }
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        VietnameseKokoroEngine.getInstance().releaseForMemoryPressure(this, "onLowMemory");
+    }
+
     private void installDiagnosticsShortcut() {
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
