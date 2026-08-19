@@ -3,6 +3,7 @@ package com.CodeBySonu.VoxSherpa.vietnamese;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.CodeBySonu.VoxSherpa.Sonic;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 
 import org.json.JSONObject;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,13 +33,16 @@ public final class VietnameseKokoroEngine {
     private static final int STYLE_SIZE = 256;
     private static final int MAX_STYLE_CACHE = 3;
     private static final String PERF_PREFS = "kokoro_vi_perf";
+    private static final String APP_PREFS = "sp3";
     private static final String PREF_CPU_THREADS = "cpu_threads";
     private static final String PREF_NNAPI_ENABLED = "nnapi_enabled";
     private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.!?…]+(?:[\\\"”’)]*)");
+    private static final Pattern EFFECT_TOKEN = Pattern.compile("(\\[[a-zA-Z]+\\]|\\.\\.\\.|[.,!?।])");
     private static final Pattern WORD_TOKEN = Pattern.compile("^[A-Za-zÀ-ỹĐđ]+(?:[-'][A-Za-zÀ-ỹĐđ]+)*$");
     private static final Pattern TOKEN_PATTERN = Pattern.compile("[A-Za-zÀ-ỹĐđ]+(?:[-'][A-Za-zÀ-ỹĐđ]+)*|\\s+|.");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern GI_ACCENT = Pattern.compile("^g[iìíỉĩị]");
+    private static final Random RANDOM = new Random();
     private static volatile VietnameseKokoroEngine instance;
 
     private final VietnameseKokoroNative nativeBridge = new VietnameseKokoroNative();
@@ -71,6 +76,33 @@ public final class VietnameseKokoroEngine {
     private Context appContext;
 
     public interface PcmConsumer { boolean onPcm(byte[] pcm); }
+
+    private static final class AudioSettings {
+        float speed;
+        float pitch;
+        boolean punctuation;
+        boolean emotion;
+        float silence;
+        String source;
+    }
+
+    private static final class EffectProfile {
+        float speed;
+        float pitch;
+        float volume;
+
+        EffectProfile(float speed, float pitch, float volume) {
+            this.speed = speed;
+            this.pitch = pitch;
+            this.volume = volume;
+        }
+    }
+
+    private static final class StreamState {
+        boolean emitted;
+        boolean firstPcm = true;
+        int chunks;
+    }
 
     private VietnameseKokoroEngine() {}
 
@@ -117,8 +149,7 @@ public final class VietnameseKokoroEngine {
         if (context == null || !isBundled(context)) return;
         final Context app = context.getApplicationContext();
         if (isReady()) {
-            TtsDiagnostics.info(app, "prewarm", "already_hot",
-                    "reason=" + reason + ", " + performanceState(app));
+            TtsDiagnostics.info(app, "prewarm", "already_hot", "reason=" + reason + ", " + performanceState(app));
             return;
         }
         if (!prewarmQueued.compareAndSet(false, true)) {
@@ -131,8 +162,7 @@ public final class VietnameseKokoroEngine {
             try {
                 prewarmBlocking(app, reason);
                 TtsDiagnostics.info(app, "prewarm", "complete",
-                        "reason=" + reason + ", elapsedMs=" + elapsedMs(started)
-                                + ", " + performanceState(app));
+                        "reason=" + reason + ", elapsedMs=" + elapsedMs(started) + ", " + performanceState(app));
             } catch (Throwable t) {
                 TtsDiagnostics.error(app, "prewarm", "failed",
                         "reason=" + reason + ", elapsedMs=" + elapsedMs(started), t);
@@ -160,9 +190,7 @@ public final class VietnameseKokoroEngine {
         try {
             if (VietnameseKokoroNative.isAvailable()) nativeTerminated = nativeBridge.cancelActiveRun();
         } catch (Throwable t) {
-            if (appContext != null) {
-                TtsDiagnostics.error(appContext, "engine", "native_cancel_failed", t.toString(), t);
-            }
+            if (appContext != null) TtsDiagnostics.error(appContext, "engine", "native_cancel_failed", t.toString(), t);
         }
         if (appContext != null) {
             TtsDiagnostics.info(appContext, "engine", "cancel",
@@ -172,10 +200,6 @@ public final class VietnameseKokoroEngine {
         }
     }
 
-    /**
-     * Explicit user-controlled accelerator mode. This only rebuilds the ONNX session;
-     * G2P, copied assets, and the small voice-style cache stay resident.
-     */
     public synchronized boolean setNnapiEnabled(Context context, boolean enabled) throws Exception {
         Context app = context.getApplicationContext();
         appContext = app;
@@ -213,45 +237,35 @@ public final class VietnameseKokoroEngine {
         final VietnameseKokoroVoice selectedVoice = voice;
         final long requestGeneration = generation.incrementAndGet();
         final long startedAt = System.nanoTime();
+        final AudioSettings settings = resolveAudioSettings(context, speed);
+
+        TtsDiagnostics.info(context, "settings", "vietnamese_audio_settings",
+                "source=" + settings.source + ", effectiveSpeed=" + settings.speed
+                        + ", effectivePitch=" + settings.pitch + ", smartPunct=" + settings.punctuation
+                        + ", emotionTags=" + settings.emotion + ", silenceScale=" + settings.silence);
+
         try {
             long prepareStart = System.nanoTime();
             prepare(context.getApplicationContext());
             long prepareMs = elapsedMs(prepareStart);
-            boolean emitted = false;
-            boolean firstPcm = true;
-            int chunkCount = 0;
-            for (String chunk : splitWithBoundary(text)) {
-                if (requestGeneration != generation.get()) return emitted;
-                long splitStart = System.nanoTime();
-                List<String> safeChunks = splitLongChunk(chunk);
-                long splitMs = elapsedMs(splitStart);
-                for (String safeChunk : safeChunks) {
-                    if (requestGeneration != generation.get()) return emitted;
-                    chunkCount++;
-                    float[] audio = synthesizeChunk(safeChunk, selectedVoice, speed, "request");
-                    if (requestGeneration != generation.get()) return emitted;
-                    if (audio != null && audio.length > 0) {
-                        long pcmStart = System.nanoTime();
-                        byte[] pcm = toPcm16(audio);
-                        long pcmMs = elapsedMs(pcmStart);
-                        if (firstPcm) {
-                            firstPcm = false;
-                            TtsDiagnostics.info(context, "latency", "first_pcm_ready",
-                                    "generation=" + requestGeneration + ", voice=" + selectedVoice.id
-                                            + ", requestToPcmMs=" + elapsedMs(startedAt)
-                                            + ", prepareMs=" + prepareMs + ", splitCheckMs=" + splitMs
-                                            + ", pcmConvertMs=" + pcmMs + ", bytes=" + pcm.length);
-                        }
-                        emitted = true;
-                        if (!consumer.onPcm(pcm)) return emitted;
-                    }
+            StreamState state = new StreamState();
+
+            if (settings.punctuation || settings.emotion) {
+                streamWithEffects(context, text, selectedVoice, settings, requestGeneration,
+                        startedAt, prepareMs, state, consumer);
+            } else {
+                for (String chunk : splitWithBoundary(text)) {
+                    if (requestGeneration != generation.get()) return state.emitted;
+                    emitText(context, chunk, selectedVoice, settings.speed, settings.pitch, 1.0f,
+                            requestGeneration, startedAt, prepareMs, state, consumer);
                 }
             }
+
             TtsDiagnostics.info(context, "engine", "stream_done",
                     "generation=" + requestGeneration + ", voice=" + selectedVoice.id
-                            + ", chunks=" + chunkCount + ", emitted=" + emitted
+                            + ", chunks=" + state.chunks + ", emitted=" + state.emitted
                             + ", elapsedMs=" + elapsedMs(startedAt));
-            return emitted;
+            return state.emitted;
         } catch (Throwable t) {
             if (requestGeneration != generation.get()) {
                 TtsDiagnostics.info(context, "engine", "stream_cancelled",
@@ -261,12 +275,192 @@ public final class VietnameseKokoroEngine {
             }
             TtsDiagnostics.error(context, "engine", "synthesis_exception",
                     "generation=" + requestGeneration + ", voice=" + selectedVoice.id
-                            + ", speed=" + speed + ", chars=" + text.length(), t);
+                            + ", speed=" + settings.speed + ", pitch=" + settings.pitch
+                            + ", chars=" + text.length(), t);
             return false;
         }
     }
 
-    /** Keep the large ONNX session alive across TTS service reconnects. */
+    private AudioSettings resolveAudioSettings(Context context, float callerSpeed) {
+        SharedPreferences sp3 = context.getSharedPreferences(APP_PREFS, Context.MODE_PRIVATE);
+        float appSpeed = clamp(sp3.getFloat("voice_speed", 1.0f), 0.25f, 2.0f);
+        float appPitch = clamp(sp3.getFloat("voice_pitch", 1.0f), 0.25f, 2.0f);
+        boolean systemTts = context instanceof android.speech.tts.TextToSpeechService;
+
+        AudioSettings out = new AudioSettings();
+        out.source = systemTts ? "system_tts" : "generate";
+        out.speed = systemTts
+                ? clamp((callerSpeed > 0f ? callerSpeed : 1.0f) * appSpeed, 0.25f, 2.0f)
+                : clamp(callerSpeed > 0f ? callerSpeed : appSpeed, 0.25f, 2.0f);
+        out.pitch = appPitch;
+        out.punctuation = sp3.getBoolean("smart_punct", false);
+        out.emotion = sp3.getBoolean("emotion_tags", false);
+        out.silence = clamp(sp3.getFloat("silence_scale", 0.2f), 0.0f, 1.0f);
+        return out;
+    }
+
+    private void streamWithEffects(Context context, String text, VietnameseKokoroVoice voice,
+                                   AudioSettings settings, long requestGeneration, long startedAt,
+                                   long prepareMs, StreamState state, PcmConsumer consumer) throws Exception {
+        EffectProfile profile = new EffectProfile(settings.speed, settings.pitch, 1.0f);
+        Matcher matcher = EFFECT_TOKEN.matcher(text);
+        int lastEnd = 0;
+
+        while (matcher.find()) {
+            if (requestGeneration != generation.get()) return;
+            String part = text.substring(lastEnd, matcher.start()).trim();
+            if (!part.isEmpty()) {
+                emitText(context, part, voice, profile.speed, profile.pitch, profile.volume,
+                        requestGeneration, startedAt, prepareMs, state, consumer);
+                if (requestGeneration != generation.get()) return;
+            }
+
+            String token = matcher.group();
+            if (token.startsWith("[")) {
+                if (settings.emotion) profile = emotionProfile(token, settings.speed, settings.pitch);
+            } else if (settings.punctuation && state.emitted) {
+                int silenceMs = punctuationSilenceMs(token, settings.silence, profile.speed);
+                if (silenceMs > 0) {
+                    byte[] silence = new byte[(SAMPLE_RATE * 2 * silenceMs) / 1000];
+                    if ((silence.length & 1) != 0) silence = new byte[silence.length + 1];
+                    if (!consumer.onPcm(silence)) return;
+                }
+            }
+            lastEnd = matcher.end();
+        }
+
+        String tail = text.substring(lastEnd).trim();
+        if (!tail.isEmpty() && requestGeneration == generation.get()) {
+            emitText(context, tail, voice, profile.speed, profile.pitch, profile.volume,
+                    requestGeneration, startedAt, prepareMs, state, consumer);
+        }
+    }
+
+    private EffectProfile emotionProfile(String token, float baseSpeed, float basePitch) {
+        String tag = token == null ? "" : token.toLowerCase(java.util.Locale.ROOT);
+        switch (tag) {
+            case "[whispers]":
+            case "[whisper]":
+                return new EffectProfile(clamp(baseSpeed * 0.95f, 0.25f, 2.0f),
+                        clamp(basePitch * 1.05f, 0.25f, 2.0f), 0.65f);
+            case "[angry]":
+                return new EffectProfile(clamp(baseSpeed * 1.05f, 0.25f, 2.0f),
+                        clamp(basePitch * 0.95f, 0.25f, 2.0f), 1.15f);
+            case "[sad]":
+                return new EffectProfile(clamp(baseSpeed * 0.92f, 0.25f, 2.0f),
+                        clamp(basePitch * 0.98f, 0.25f, 2.0f), 0.80f);
+            case "[sarcastically]":
+            case "[sarcastic]":
+                return new EffectProfile(clamp(baseSpeed * 1.02f, 0.25f, 2.0f),
+                        clamp(basePitch * 0.95f, 0.25f, 2.0f), 1.0f);
+            case "[giggles]":
+            case "[giggle]":
+                return new EffectProfile(clamp(baseSpeed * 1.05f, 0.25f, 2.0f),
+                        clamp(basePitch * 1.10f, 0.25f, 2.0f), 1.10f);
+            case "[normal]":
+            default:
+                return new EffectProfile(baseSpeed, basePitch, 1.0f);
+        }
+    }
+
+    private int punctuationSilenceMs(String token, float silenceScale, float currentSpeed) {
+        int base;
+        switch (token) {
+            case ",": base = 150; break;
+            case "!": base = 200; break;
+            case "?": base = 250; break;
+            case ".":
+            case "।": base = 300; break;
+            case "...": base = 450; break;
+            default: return 0;
+        }
+        float multiplier = silenceScale * 2.0f;
+        int adjusted = (int) ((base * multiplier) / Math.max(0.25f, currentSpeed));
+        int jitter = (int) (adjusted * 0.10f);
+        if (jitter > 0) adjusted += RANDOM.nextInt(jitter * 2 + 1) - jitter;
+        return Math.max(0, adjusted);
+    }
+
+    private void emitText(Context context, String text, VietnameseKokoroVoice voice,
+                          float speed, float pitch, float volume, long requestGeneration,
+                          long startedAt, long prepareMs, StreamState state,
+                          PcmConsumer consumer) throws Exception {
+        long splitStart = System.nanoTime();
+        List<String> safeChunks = splitLongChunk(text);
+        long splitMs = elapsedMs(splitStart);
+        for (String safeChunk : safeChunks) {
+            if (requestGeneration != generation.get()) return;
+            state.chunks++;
+            float[] audio = synthesizeChunk(safeChunk, voice, speed, "request");
+            if (requestGeneration != generation.get()) return;
+            if (audio == null || audio.length == 0) continue;
+
+            long pcmStart = System.nanoTime();
+            byte[] pcm = toPcm16(audio);
+            pcm = applyPitch(pcm, pitch);
+            if (Math.abs(volume - 1.0f) > 0.001f) applyVolumeInPlace(pcm, volume);
+            long pcmMs = elapsedMs(pcmStart);
+
+            if (state.firstPcm) {
+                state.firstPcm = false;
+                TtsDiagnostics.info(context, "latency", "first_pcm_ready",
+                        "generation=" + requestGeneration + ", voice=" + voice.id
+                                + ", requestToPcmMs=" + elapsedMs(startedAt)
+                                + ", prepareMs=" + prepareMs + ", splitCheckMs=" + splitMs
+                                + ", pcmConvertAndPitchMs=" + pcmMs + ", speed=" + speed
+                                + ", pitch=" + pitch + ", bytes=" + pcm.length);
+            }
+            state.emitted = true;
+            if (!consumer.onPcm(pcm)) return;
+        }
+    }
+
+    private byte[] applyPitch(byte[] pcm, float pitch) {
+        float safePitch = clamp(pitch, 0.25f, 2.0f);
+        if (pcm == null || pcm.length < 2 || Math.abs(safePitch - 1.0f) < 0.001f) return pcm;
+        try {
+            int samples = pcm.length / 2;
+            short[] in = new short[samples];
+            for (int i = 0; i < samples; i++) {
+                int lo = pcm[i * 2] & 0xff;
+                int hi = pcm[i * 2 + 1] << 8;
+                in[i] = (short) (lo | hi);
+            }
+            Sonic sonic = new Sonic(SAMPLE_RATE, 1);
+            sonic.setPitch(safePitch);
+            sonic.writeShortToStream(in, in.length);
+            sonic.flushStream();
+            int available = sonic.samplesAvailable();
+            if (available <= 0) return pcm;
+            short[] out = new short[available];
+            int read = sonic.readShortFromStream(out, available);
+            if (read <= 0) return pcm;
+            byte[] result = new byte[read * 2];
+            for (int i = 0; i < read; i++) {
+                result[i * 2] = (byte) (out[i] & 0xff);
+                result[i * 2 + 1] = (byte) ((out[i] >>> 8) & 0xff);
+            }
+            return result;
+        } catch (Throwable t) {
+            if (appContext != null) TtsDiagnostics.warn(appContext, "settings", "pitch_fallback",
+                    "Sonic pitch processing failed; using unmodified PCM. pitch=" + safePitch + ", error=" + t);
+            return pcm;
+        }
+    }
+
+    private static void applyVolumeInPlace(byte[] pcm, float volume) {
+        if (pcm == null) return;
+        for (int i = 0; i + 1 < pcm.length; i += 2) {
+            int lo = pcm[i] & 0xff;
+            int hi = pcm[i + 1] << 8;
+            int sample = (short) (lo | hi);
+            int scaled = Math.round(sample * volume);
+            scaled = Math.max(-32768, Math.min(32767, scaled));
+            pcm[i] = (byte) (scaled & 0xff);
+            pcm[i + 1] = (byte) ((scaled >>> 8) & 0xff);
+        }
+    }
+
     public void retainAcrossServiceDestroy(Context context) {
         if (context != null) {
             TtsDiagnostics.info(context, "engine", "session_retained",
@@ -275,7 +469,6 @@ public final class VietnameseKokoroEngine {
         }
     }
 
-    /** Release only when Android explicitly reports serious memory pressure. */
     public synchronized void releaseForMemoryPressure(Context context, String reason) {
         if (context != null) appContext = context.getApplicationContext();
         TtsDiagnostics.warn(appContext, "engine", "memory_pressure_release",
@@ -321,8 +514,7 @@ public final class VietnameseKokoroEngine {
         String phonemes = phonemize("xin chào");
         long[] ids = tokenIds(phonemes);
         float[] style = selectStyle(VietnameseKokoroVoice.DEFAULT, phonemes.length());
-        String json = nativeBridge.benchmarkCpuThreads(
-                assets.model.getAbsolutePath(), ids, style, 1.0f, 2, 5);
+        String json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 2, 5);
         JSONObject result = new JSONObject(json);
         int best = result.getInt("bestThreads");
         prefs.edit().putInt(PREF_CPU_THREADS, best).apply();
@@ -331,8 +523,6 @@ public final class VietnameseKokoroEngine {
         modelWarm = true;
         activeNnapi = false;
 
-        // The native CPU benchmark intentionally ends on its winning CPU session. If the user
-        // had explicitly enabled NNAPI, restore that provider after saving the CPU result.
         if (restoreNnapi) {
             nativeBridge.destroyEngine();
             modelReady = false;
@@ -376,8 +566,7 @@ public final class VietnameseKokoroEngine {
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
             activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 4);
             boolean requestedNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
-            modelReady = nativeBridge.createEngine(
-                    assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);
+            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);
             if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");
             activeNnapi = nativeBridge.isNnapiActive();
             if (requestedNnapi && !activeNnapi) {
@@ -426,7 +615,7 @@ public final class VietnameseKokoroEngine {
         stageStart = System.nanoTime();
         float[] style = selectStyle(voice, phonemes.length());
         long styleMs = elapsedMs(stageStart);
-        float safeSpeed = Math.max(0.70f, Math.min(1.50f, speed));
+        float safeSpeed = clamp(speed, 0.25f, 2.0f);
 
         long nativeStart = System.nanoTime();
         float[] audio = nativeBridge.synthesize(ids, style, safeSpeed);
@@ -449,6 +638,7 @@ public final class VietnameseKokoroEngine {
                             + ", audioSamples=" + (audio == null ? 0 : audio.length)
                             + ", g2pMs=" + g2pMs + ", tokenizeMs=" + tokenizeMs
                             + ", styleMs=" + styleMs + ", nativeCallMs=" + nativeCallMs
+                            + ", requestedSpeed=" + speed + ", effectiveModelSpeed=" + safeSpeed
                             + ", totalMs=" + elapsedMs(totalStart) + nativeProfile);
         }
         return audio;
@@ -586,6 +776,10 @@ public final class VietnameseKokoroEngine {
             pcm[i * 2 + 1] = (byte) ((value >>> 8) & 0xff);
         }
         return pcm;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static long elapsedMs(long startedNanos) {
