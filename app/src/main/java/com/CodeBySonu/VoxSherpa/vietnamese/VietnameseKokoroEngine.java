@@ -666,7 +666,8 @@ public final class VietnameseKokoroEngine {
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
             activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 0);
             boolean requestedQnnGpu = isQnnGpuRequested(context);
-            boolean requestedNnapi = !requestedQnnGpu && prefs.getBoolean(PREF_NNAPI_ENABLED, false);
+            boolean requestedNnapi = !BuildConfig.KOKORO_QNN_GPU_DEFAULT && !requestedQnnGpu
+                    && prefs.getBoolean(PREF_NNAPI_ENABLED, false);
             if (requestedQnnGpu && !VietnameseKokoroNative.isQnnGpuLibraryAvailable()) {
                 TtsDiagnostics.warn(context, "provider", "qnn_gpu_library_unavailable",
                         "QNN GPU experiment requested but libQnnGpu/libQnnSystem could not be preloaded: "
