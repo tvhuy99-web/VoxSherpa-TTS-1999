@@ -57,6 +57,8 @@ public final class VietnameseTtsBootstrapProvider extends ContentProvider {
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             @Override
             public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+                SettingsAccessibilityPersistence.install(activity);
+
                 // Exact-class check is intentional: VietnameseTtssettingsActivity extends
                 // TtssettingsActivity and must be allowed to render normally.
                 if (activity == null || activity.getClass() != TtssettingsActivity.class) return;
@@ -86,7 +88,9 @@ public final class VietnameseTtsBootstrapProvider extends ContentProvider {
             @Override public void onActivityPaused(Activity activity) {}
             @Override public void onActivityStopped(Activity activity) {}
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) {}
-            @Override public void onActivityDestroyed(Activity activity) {}
+            @Override public void onActivityDestroyed(Activity activity) {
+                SettingsAccessibilityPersistence.uninstall(activity);
+            }
         });
 
         routeGuardInstalled = true;
