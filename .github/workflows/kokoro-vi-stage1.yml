@@ -19,8 +19,15 @@ concurrency:
 
 jobs:
   build-stage1:
+    name: Build ORT ${{ matrix.ort_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        ort_version:
+          - '1.17.1'
+          - '1.28.0'
 
     steps:
       - name: Checkout
@@ -62,6 +69,8 @@ jobs:
         run: cargo install cargo-ndk --locked
 
       - name: Prepare Vietnamese model and native dependencies
+        env:
+          ORT_VERSION: ${{ matrix.ort_version }}
         run: ./scripts/prepare_kokoro_vi_stage1.sh
 
       - name: Build Stage-1 release APK
@@ -100,7 +109,7 @@ jobs:
       - name: Upload Stage-1 APK
         uses: actions/upload-artifact@v4
         with:
-          name: VoxSherpa-Kokoro-Vietnamese-Stage1
+          name: VoxSherpa-Kokoro-Vietnamese-ORT-${{ matrix.ort_version }}
           path: app/build/outputs/apk/release/*.apk
           retention-days: 7
           if-no-files-found: error
