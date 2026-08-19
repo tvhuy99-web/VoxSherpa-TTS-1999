@@ -1,0 +1,181 @@
+name: Apply XNNPACK experiment patch
+
+on:
+  push:
+    branches:
+      - agent/xnnpack-experiment
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/xnnpack-experiment
+          fetch-depth: 0
+
+      - name: Apply controlled CPU vs XNNPACK A/B patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'Missing patch anchor: {label}')
+              return text.replace(old, new, 1)
+
+          # app/build.gradle
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          s = replace_once(s,
+              "def enableKokoroViStage1 = project.hasProperty('kokoroViStage1') &&\n        project.property('kokoroViStage1').toString().toBoolean()\n",
+              "def enableKokoroViStage1 = project.hasProperty('kokoroViStage1') &&\n        project.property('kokoroViStage1').toString().toBoolean()\ndef enableKokoroViXnnpack = project.hasProperty('kokoroViXnnpack') &&\n        project.property('kokoroViXnnpack').toString().toBoolean()\n",
+              'gradle xnnpack flag')
+          s = replace_once(s,
+              "        versionName resolvedVersionName\n\n        ndk {\n            abiFilters 'arm64-v8a', 'x86_64'\n        }\n",
+              "        versionName resolvedVersionName\n        buildConfigField \"boolean\", \"KOKORO_XNNPACK_AB\", enableKokoroViXnnpack ? \"true\" : \"false\"\n\n        ndk {\n            if (enableKokoroViXnnpack) {\n                abiFilters 'arm64-v8a'\n            } else {\n                abiFilters 'arm64-v8a', 'x86_64'\n            }\n        }\n",
+              'gradle build config')
+          s = replace_once(s,
+              "    buildFeatures {\n        viewBinding true\n    }\n",
+              "    buildFeatures {\n        viewBinding true\n        buildConfig true\n    }\n",
+              'gradle buildConfig feature')
+          p.write_text(s)
+
+          # VietnameseKokoroNative.java
+          p = Path('app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroNative.java')
+          s = p.read_text()
+          s = replace_once(s,
+              "    public native boolean createEngine(String modelPath, int cpuThreads, boolean useNnapi);\n",
+              "    public native boolean createEngine(String modelPath, int cpuThreads, boolean useNnapi, boolean useXnnpack);\n",
+              'native createEngine signature')
+          s = replace_once(s,
+              "    public native boolean isNnapiActive();\n",
+              "    public native boolean isNnapiActive();\n\n    /** True only when the live ONNX session was created with XNNPACK EP. */\n    public native boolean isXnnpackActive();\n",
+              'native xnnpack active')
+          s = s.replace(
+              "    /** lockWaitUs, inputPrepUs, ortRunUs, outputCopyUs, totalUs, activeThreads */\n",
+              "    /** lockWaitUs, inputPrepUs, ortRunUs, outputCopyUs, totalUs, ortCpuThreads, xnnpackThreads */\n")
+          p.write_text(s)
+
+          # VietnameseKokoroEngine.java
+          p = Path('app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroEngine.java')
+          s = p.read_text()
+          s = replace_once(s,
+              "import com.CodeBySonu.VoxSherpa.Sonic;\n",
+              "import com.CodeBySonu.VoxSherpa.BuildConfig;\nimport com.CodeBySonu.VoxSherpa.Sonic;\n",
+              'engine BuildConfig import')
+          s = replace_once(s,
+              "    private static final String PREF_NNAPI_ENABLED = \"nnapi_enabled\";\n",
+              "    private static final String PREF_NNAPI_ENABLED = \"nnapi_enabled\";\n    private static final String PREF_RUNTIME_BACKEND = \"runtime_backend\";\n    public static final String BACKEND_CPU = \"CPU\";\n    public static final String BACKEND_XNNPACK = \"XNNPACK\";\n",
+              'engine backend constants')
+          s = replace_once(s,
+              "    private volatile boolean activeNnapi;\n",
+              "    private volatile boolean activeNnapi;\n    private volatile boolean activeXnnpack;\n",
+              'engine xnnpack field')
+
+          insert_anchor = "    public boolean isNnapiActive() {\n        return activeNnapi;\n    }\n\n"
+          insert_block = '''    public boolean isNnapiActive() {\n        return activeNnapi;\n    }\n\n    public boolean isXnnpackActive() {\n        return activeXnnpack;\n    }\n\n    public boolean isXnnpackAbBuild() {\n        return BuildConfig.KOKORO_XNNPACK_AB;\n    }\n\n    public String requestedRuntimeBackend(Context context) {\n        if (!BuildConfig.KOKORO_XNNPACK_AB || context == null) return BACKEND_CPU;\n        String saved = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE)\n                .getString(PREF_RUNTIME_BACKEND, BACKEND_CPU);\n        return BACKEND_XNNPACK.equals(saved) ? BACKEND_XNNPACK : BACKEND_CPU;\n    }\n\n    public boolean isXnnpackRequested(Context context) {\n        return BuildConfig.KOKORO_XNNPACK_AB\n                && BACKEND_XNNPACK.equals(requestedRuntimeBackend(context));\n    }\n\n    private String activeProviderLabel() {\n        if (activeXnnpack) return BACKEND_XNNPACK;\n        if (activeNnapi) return \"NNAPI\";\n        return BACKEND_CPU;\n    }\n\n    public synchronized String setRuntimeBackend(Context context, String backend) throws Exception {\n        if (context == null) throw new IllegalArgumentException(\"Context is required.\");\n        Context app = context.getApplicationContext();\n        appContext = app;\n        String requested = BACKEND_XNNPACK.equals(backend) ? BACKEND_XNNPACK : BACKEND_CPU;\n        if (BACKEND_XNNPACK.equals(requested) && !BuildConfig.KOKORO_XNNPACK_AB) {\n            throw new IllegalStateException(\"XNNPACK runtime is not packaged in this build.\");\n        }\n\n        SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);\n        prefs.edit()\n                .putString(PREF_RUNTIME_BACKEND, requested)\n                .putInt(PREF_CPU_THREADS, 0)\n                .putBoolean(PREF_NNAPI_ENABLED, false)\n                .apply();\n\n        long started = System.nanoTime();\n        TtsDiagnostics.info(app, \"provider\", \"backend_switch_start\",\n                \"requestedBackend=\" + requested + \", CPU mode uses ORT default; XNNPACK uses its dedicated threadpool\");\n        cancel();\n        if (modelReady) nativeBridge.destroyEngine();\n        modelReady = false;\n        modelWarm = false;\n        activeNnapi = false;\n        activeXnnpack = false;\n        activeCpuThreads = 0;\n\n        prepare(app);\n        if (!modelWarm && !warmCurrentSession(app, \"runtime_backend_switch:\" + requested)) {\n            throw new IllegalStateException(\"Vietnamese Kokoro runtime switch warm-up was interrupted.\");\n        }\n\n        String active = activeProviderLabel();\n        TtsDiagnostics.info(app, \"provider\", \"backend_switch_complete\",\n                \"requestedBackend=\" + requested + \", activeProvider=\" + active\n                        + \", elapsedMs=\" + elapsedMs(started) + \", \" + performanceState(app));\n        return active;\n    }\n\n'''
+          s = replace_once(s, insert_anchor, insert_block, 'engine backend API')
+
+          old_perf = '''            return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm\n                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")\n                    + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads\n                    + ", savedCpuThreads=" + saved + " (0=ORT default/auto-affinity)"\n                    + ", cachedVoiceStyles=" + voiceStyleCache.size();\n'''
+          new_perf = '''            return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm\n                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + activeProviderLabel()\n                    + ", requestedBackend=" + requestedRuntimeBackend(context)\n                    + ", xnnpackBuild=" + BuildConfig.KOKORO_XNNPACK_AB\n                    + ", xnnpackRequested=" + isXnnpackRequested(context)\n                    + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads\n                    + ", savedCpuThreads=" + saved + " (0=ORT default/auto-affinity)"\n                    + ", cachedVoiceStyles=" + voiceStyleCache.size();\n'''
+          s = replace_once(s, old_perf, new_perf, 'engine performance state')
+
+          # Ensure every existing reset also clears XNNPACK state.
+          s = s.replace("        activeNnapi = false;\n", "        activeNnapi = false;\n        activeXnnpack = false;\n")
+          # Undo the one duplicate produced inside setRuntimeBackend by the global replacement.
+          s = s.replace("        activeNnapi = false;\n        activeXnnpack = false;\n        activeXnnpack = false;\n", "        activeNnapi = false;\n        activeXnnpack = false;\n")
+
+          old_prepare = '''            boolean requestedNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);\n            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);\n            if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");\n            activeNnapi = nativeBridge.isNnapiActive();\n            if (requestedNnapi && !activeNnapi) {\n                prefs.edit().putBoolean(PREF_NNAPI_ENABLED, false).apply();\n                TtsDiagnostics.warn(context, "provider", "nnapi_auto_disabled",\n                        "NNAPI session was unavailable or incompatible; continuing safely on CPU.");\n            }\n            TtsDiagnostics.info(context, "engine", "model_ready",\n                    "elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()\n                            + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")\n                            + ", cpuThreads=" + threadLabel(activeCpuThreads));\n'''
+          new_prepare = '''            boolean requestedXnnpack = isXnnpackRequested(context);\n            boolean requestedNnapi = !BuildConfig.KOKORO_XNNPACK_AB && !requestedXnnpack\n                    && prefs.getBoolean(PREF_NNAPI_ENABLED, false);\n            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads,\n                    requestedNnapi, requestedXnnpack);\n            if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");\n            activeXnnpack = nativeBridge.isXnnpackActive();\n            activeNnapi = nativeBridge.isNnapiActive();\n            if (requestedXnnpack && !activeXnnpack) {\n                TtsDiagnostics.warn(context, "provider", "xnnpack_fallback",\n                        "XNNPACK session could not be created; native backend fell back to CPU.");\n            }\n            if (requestedNnapi && !activeNnapi) {\n                prefs.edit().putBoolean(PREF_NNAPI_ENABLED, false).apply();\n                TtsDiagnostics.warn(context, "provider", "nnapi_auto_disabled",\n                        "NNAPI session was unavailable or incompatible; continuing safely on CPU.");\n            }\n            TtsDiagnostics.info(context, "engine", "model_ready",\n                    "elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()\n                            + ", provider=" + activeProviderLabel()\n                            + ", requestedBackend=" + requestedRuntimeBackend(context)\n                            + ", xnnpackRequested=" + requestedXnnpack\n                            + ", cpuThreads=" + threadLabel(activeCpuThreads));\n'''
+          s = replace_once(s, old_prepare, new_prepare, 'engine prepare provider')
+
+          s = s.replace(
+              '+ (activeNnapi ? "NNAPI" : "CPU") + ", textChars=" + text.length()',
+              '+ activeProviderLabel() + ", textChars=" + text.length()', 1)
+          old_native_profile = '''                    + ", nativeTotalUs=" + nativeTiming[4]\n                    + ", cpuThreads=" + threadLabel((int) nativeTiming[5]);\n'''
+          new_native_profile = '''                    + ", nativeTotalUs=" + nativeTiming[4]\n                    + ", cpuThreads=" + threadLabel((int) nativeTiming[5]);\n            if (nativeTiming.length >= 7) {\n                nativeProfile += ", xnnpackThreads=" + nativeTiming[6];\n            }\n'''
+          s = replace_once(s, old_native_profile, new_native_profile, 'engine native timing')
+          p.write_text(s)
+
+          # Native C++
+          p = Path('app/src/main/cpp/kokoro_vi/kokoro_vi_jni.cpp')
+          s = p.read_text()
+          s = replace_once(s,
+              "std::atomic<bool> g_active_nnapi{false};\nstd::array<int64_t, 6> g_last_timing_us{0,0,0,0,0,0};\nint g_active_threads = 0;\n",
+              "std::atomic<bool> g_active_nnapi{false};\nstd::atomic<bool> g_active_xnnpack{false};\nstd::array<int64_t, 7> g_last_timing_us{0,0,0,0,0,0,0};\nint g_active_threads = 0;\nint g_active_xnnpack_threads = 0;\n",
+              'native xnnpack state')
+
+          old_create_session = '''std::unique_ptr<Ort::Session> create_session(const std::string& path, int cpu_threads, bool use_nnapi) {\n    Ort::SessionOptions options;\n    // cpu_threads == 0 intentionally leaves ORT in its default intra-op mode. With\n    // sequential execution this also lets ORT choose its normal worker affinity.\n    if (cpu_threads > 0) options.SetIntraOpNumThreads(cpu_threads);\n    options.SetInterOpNumThreads(1);\n    options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);\n    options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);\n    if (use_nnapi) append_nnapi(options);\n    return std::make_unique<Ort::Session>(g_env, path.c_str(), options);\n}\n'''
+          new_create_session = '''void append_xnnpack(Ort::SessionOptions& options, int xnnpack_threads) {\n    const std::string thread_count = std::to_string(std::max(1, xnnpack_threads));\n    const char* keys[] = {"intra_op_num_threads"};\n    const char* values[] = {thread_count.c_str()};\n    const OrtApi& api = Ort::GetApi();\n    OrtStatus* status = api.SessionOptionsAppendExecutionProvider(\n            options, "XNNPACK", keys, values, 1);\n    if (status != nullptr) {\n        const char* raw = api.GetErrorMessage(status);\n        std::string message = raw == nullptr ? "unknown XNNPACK provider error" : raw;\n        api.ReleaseStatus(status);\n        throw std::runtime_error("Cannot enable XNNPACK: " + message);\n    }\n}\n\nstd::unique_ptr<Ort::Session> create_session(\n        const std::string& path, int cpu_threads, bool use_nnapi, bool use_xnnpack) {\n    Ort::SessionOptions options;\n    int xnnpack_threads = 0;\n    if (use_xnnpack) {\n        const unsigned int detected = std::thread::hardware_concurrency();\n        xnnpack_threads = std::max(1, std::min(8, static_cast<int>(detected == 0 ? 4u : detected)));\n        // XNNPACK owns a separate intra-op pool. ORT recommends a single ORT intra-op\n        // thread plus disabled spinning to avoid thread-pool contention.\n        options.SetIntraOpNumThreads(1);\n        options.AddConfigEntry("session.intra_op.allow_spinning", "0");\n    } else if (cpu_threads > 0) {\n        options.SetIntraOpNumThreads(cpu_threads);\n    }\n    options.SetInterOpNumThreads(1);\n    options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);\n    options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);\n    if (use_xnnpack) append_xnnpack(options, xnnpack_threads);\n    else if (use_nnapi) append_nnapi(options);\n    return std::make_unique<Ort::Session>(g_env, path.c_str(), options);\n}\n'''
+          s = replace_once(s, old_create_session, new_create_session, 'native create_session')
+
+          pattern = re.compile(r'extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_createEngine\([\s\S]*?\n}\n\nextern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_destroyEngine')
+          new_engine = '''extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_createEngine(\n        JNIEnv* env, jobject, jstring model_path, jint cpu_threads, jboolean use_nnapi, jboolean use_xnnpack) {\n    const auto path = jstring_to_utf8(env, model_path);\n    const bool requested_xnnpack = use_xnnpack == JNI_TRUE;\n    const bool requested_nnapi = !requested_xnnpack && use_nnapi == JNI_TRUE;\n    terminate_active_run();\n    try {\n        std::lock_guard<std::mutex> lock(g_mutex);\n        g_session.reset();\n        g_active_nnapi.store(false, std::memory_order_release);\n        g_active_xnnpack.store(false, std::memory_order_release);\n        g_active_xnnpack_threads = 0;\n        if (requested_xnnpack) {\n            try {\n                const unsigned int detected = std::thread::hardware_concurrency();\n                const int xnn_threads = std::max(1, std::min(8, static_cast<int>(detected == 0 ? 4u : detected)));\n                g_session = create_session(path, 1, false, true);\n                g_active_xnnpack.store(true, std::memory_order_release);\n                g_active_threads = 1;\n                g_active_xnnpack_threads = xnn_threads;\n                LOGI("Vietnamese Kokoro loaded with XNNPACK, ORT intra-op=1, xnnpackThreads=%d", xnn_threads);\n            } catch (const std::exception& xnn_error) {\n                LOGW("XNNPACK session failed, falling back to CPU: %s", xnn_error.what());\n                g_session = create_session(path, cpu_threads, false, false);\n                g_active_threads = cpu_threads;\n                LOGI("Vietnamese Kokoro CPU fallback after XNNPACK failure, cpuThreads=%d", cpu_threads);\n            }\n        } else if (requested_nnapi) {\n            try {\n                g_session = create_session(path, cpu_threads, true, false);\n                g_active_nnapi.store(true, std::memory_order_release);\n                g_active_threads = cpu_threads;\n                LOGI("Vietnamese Kokoro loaded with NNAPI + cpuThreads=%d", cpu_threads);\n            } catch (const std::exception& nnapi_error) {\n                LOGW("NNAPI session failed, falling back to CPU: %s", nnapi_error.what());\n                g_session = create_session(path, cpu_threads, false, false);\n                g_active_threads = cpu_threads;\n                LOGI("Vietnamese Kokoro CPU fallback loaded with cpuThreads=%d", cpu_threads);\n            }\n        } else {\n            g_session = create_session(path, cpu_threads, false, false);\n            g_active_threads = cpu_threads;\n            LOGI("Vietnamese Kokoro loaded with CPU cpuThreads=%d (0=ORT default + auto affinity)", cpu_threads);\n        }\n        return JNI_TRUE;\n    } catch (const Ort::Exception& e) {\n        g_active_nnapi.store(false, std::memory_order_release);\n        g_active_xnnpack.store(false, std::memory_order_release);\n        g_active_xnnpack_threads = 0;\n        LOGE("ONNX load error: %s", e.what());\n        throw_runtime(env, std::string("Vietnamese Kokoro model load failed: ") + e.what());\n    } catch (const std::exception& e) {\n        g_active_nnapi.store(false, std::memory_order_release);\n        g_active_xnnpack.store(false, std::memory_order_release);\n        g_active_xnnpack_threads = 0;\n        throw_runtime(env, std::string("Vietnamese Kokoro native load failed: ") + e.what());\n    }\n    return JNI_FALSE;\n}\n\nextern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_destroyEngine'''
+          s, count = pattern.subn(new_engine, s, count=1)
+          if count != 1:
+              raise SystemExit('Missing patch anchor: native createEngine function')
+
+          s = replace_once(s,
+              "    g_active_nnapi.store(false, std::memory_order_release);\n}\n\nextern \"C\" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_cancelActiveRun",
+              "    g_active_nnapi.store(false, std::memory_order_release);\n    g_active_xnnpack.store(false, std::memory_order_release);\n    g_active_xnnpack_threads = 0;\n}\n\nextern \"C\" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_cancelActiveRun",
+              'native destroy xnnpack reset')
+          s = replace_once(s,
+              "extern \"C\" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isNnapiActive(JNIEnv*, jobject) {\n    return g_active_nnapi.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;\n}\n",
+              "extern \"C\" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isNnapiActive(JNIEnv*, jobject) {\n    return g_active_nnapi.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;\n}\n\nextern \"C\" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isXnnpackActive(JNIEnv*, jobject) {\n    return g_active_xnnpack.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;\n}\n",
+              'native isXnnpackActive')
+          s = s.replace(
+              "g_last_timing_us = {lock_wait_us, input_prep_us, cancelled_run_us, 0, us_since(total_start), g_active_threads};",
+              "g_last_timing_us = {lock_wait_us, input_prep_us, cancelled_run_us, 0, us_since(total_start), g_active_threads, g_active_xnnpack_threads};")
+          s = s.replace(
+              "g_last_timing_us = {lock_wait_us, input_prep_us, ort_run_us, output_copy_us, us_since(total_start), g_active_threads};",
+              "g_last_timing_us = {lock_wait_us, input_prep_us, ort_run_us, output_copy_us, us_since(total_start), g_active_threads, g_active_xnnpack_threads};")
+          s = s.replace("std::array<jlong,6> values{};", "std::array<jlong,7> values{};")
+          s = re.sub(r'create_session\(path, ([^,\n\)]+), false\)', r'create_session(path, \1, false, false)', s)
+          s = s.replace(
+              "        g_session.reset();\n        g_active_nnapi.store(false, std::memory_order_release);\n        for (int candidate : candidates) {",
+              "        g_session.reset();\n        g_active_nnapi.store(false, std::memory_order_release);\n        g_active_xnnpack.store(false, std::memory_order_release);\n        g_active_xnnpack_threads = 0;\n        for (int candidate : candidates) {")
+          p.write_text(s)
+
+          # Accessible diagnostics UI: CPU vs XNNPACK only in experiment build.
+          p = Path('app/src/main/java/com/CodeBySonu/VoxSherpa/system/TtsDiagnosticsActivity.java')
+          s = p.read_text()
+          s = replace_once(s,
+              "import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;\n",
+              "import com.CodeBySonu.VoxSherpa.BuildConfig;\nimport com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;\n",
+              'diagnostics BuildConfig import')
+          s = replace_once(s,
+              "    private Button benchmark;\n    private Button nnapi;\n",
+              "    private Button benchmark;\n    private Button nnapi;\n    private Button cpuBackend;\n    private Button xnnpackBackend;\n",
+              'diagnostics runtime fields')
+          ui = '''        if (BuildConfig.KOKORO_XNNPACK_AB) {\n            TextView backendTitle = new TextView(this);\n            backendTitle.setText("Kokoro runtime A/B — CPU vs XNNPACK, same ORT 1.26.0");\n            backendTitle.setTextSize(16f);\n            backendTitle.setPadding(0, pad, 0, 0);\n            root.addView(backendTitle);\n\n            cpuBackend = new Button(this);\n            cpuBackend.setContentDescription("Use CPU with ONNX Runtime 1.26.0. The session is rebuilt and warmed before testing.");\n            cpuBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_CPU));\n            root.addView(cpuBackend, new LinearLayout.LayoutParams(\n                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));\n\n            xnnpackBackend = new Button(this);\n            xnnpackBackend.setContentDescription("Use XNNPACK with ONNX Runtime 1.26.0. XNNPACK uses its dedicated threadpool and the same Kokoro model and voice.");\n            xnnpackBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_XNNPACK));\n            root.addView(xnnpackBackend, new LinearLayout.LayoutParams(\n                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));\n        }\n\n'''
+          s = replace_once(s, "        root.addView(actions);\n\n", "        root.addView(actions);\n\n" + ui, 'diagnostics xnnpack UI')
+          s = s.replace(
+              "        root.addView(nnapi, new LinearLayout.LayoutParams(\n                LinearLayout.LayoutParams.MATCH_PARENT,\n                LinearLayout.LayoutParams.WRAP_CONTENT\n        ));\n",
+              "        root.addView(nnapi, new LinearLayout.LayoutParams(\n                LinearLayout.LayoutParams.MATCH_PARENT,\n                LinearLayout.LayoutParams.WRAP_CONTENT\n        ));\n        if (BuildConfig.KOKORO_XNNPACK_AB) nnapi.setVisibility(android.view.View.GONE);\n", 1)
+          s = s.replace(
+              "        root.addView(benchmark, new LinearLayout.LayoutParams(\n                LinearLayout.LayoutParams.MATCH_PARENT,\n                LinearLayout.LayoutParams.WRAP_CONTENT\n        ));\n",
+              "        root.addView(benchmark, new LinearLayout.LayoutParams(\n                LinearLayout.LayoutParams.MATCH_PARENT,\n                LinearLayout.LayoutParams.WRAP_CONTENT\n        ));\n        if (BuildConfig.KOKORO_XNNPACK_AB) benchmark.setVisibility(android.view.View.GONE);\n", 1)
+          s = replace_once(s,
+              "        refreshProviderButton();\n    }\n\n    private void refreshProviderButton()",
+              "        refreshProviderButton();\n        refreshRuntimeButtons();\n    }\n\n    private void refreshRuntimeButtons() {\n        if (!BuildConfig.KOKORO_XNNPACK_AB || cpuBackend == null || xnnpackBackend == null) return;\n        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();\n        String requested = engine.requestedRuntimeBackend(this);\n        boolean xnnRequested = VietnameseKokoroEngine.BACKEND_XNNPACK.equals(requested);\n        cpuBackend.setText(!xnnRequested ? \"CPU • ORT 1.26.0 — SELECTED\" : \"CPU • ORT 1.26.0 — use this mode\");\n        xnnpackBackend.setText(xnnRequested\n                ? (engine.isXnnpackActive() ? \"XNNPACK • ORT 1.26.0 — SELECTED / ACTIVE\"\n                        : \"XNNPACK • ORT 1.26.0 — SELECTED / FALLBACK CPU\")\n                : \"XNNPACK • ORT 1.26.0 — use this mode\");\n    }\n\n    private void switchRuntimeBackend(String backend) {\n        if (!BuildConfig.KOKORO_XNNPACK_AB || cpuBackend == null || xnnpackBackend == null) return;\n        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();\n        final boolean xnn = VietnameseKokoroEngine.BACKEND_XNNPACK.equals(backend);\n        cpuBackend.setEnabled(false);\n        xnnpackBackend.setEnabled(false);\n        cpuBackend.setText(xnn ? \"CPU • ORT 1.26.0\" : \"Switching to CPU…\");\n        xnnpackBackend.setText(xnn ? \"Switching to XNNPACK…\" : \"XNNPACK • ORT 1.26.0\");\n        TtsDiagnostics.info(this, \"provider\", \"ui_backend_requested\",\n                \"User requested runtime backend=\" + backend + \" for controlled CPU/XNNPACK A/B.\");\n        new Thread(() -> {\n            try {\n                String active = engine.setRuntimeBackend(this, backend);\n                runOnUiThread(() -> {\n                    cpuBackend.setEnabled(true);\n                    xnnpackBackend.setEnabled(true);\n                    refresh();\n                    String message = xnn && !VietnameseKokoroEngine.BACKEND_XNNPACK.equals(active)\n                            ? \"XNNPACK could not stay active; CPU fallback is active. See the log.\"\n                            : \"Runtime switched to \" + active + \" and warmed. You can test TalkBack now.\";\n                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();\n                });\n            } catch (Throwable t) {\n                TtsDiagnostics.error(this, \"provider\", \"ui_backend_switch_failed\", t.toString(), t);\n                runOnUiThread(() -> {\n                    cpuBackend.setEnabled(true);\n                    xnnpackBackend.setEnabled(true);\n                    refresh();\n                    Toast.makeText(this, \"Runtime switch failed. See TTS Logs.\", Toast.LENGTH_LONG).show();\n                });\n            }\n        }, \"KokoroVi-XNNPACK-Switch\").start();\n    }\n\n    private void refreshProviderButton()",
+              'diagnostics runtime methods')
+          p.write_text(s)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- app/build.gradle \
+            app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroNative.java \
+            app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroEngine.java \
+            app/src/main/cpp/kokoro_vi/kokoro_vi_jni.cpp \
+            app/src/main/java/com/CodeBySonu/VoxSherpa/system/TtsDiagnosticsActivity.java
+          git diff --cached --check
+          git commit -m "Add controlled CPU vs XNNPACK runtime selector"
+          git push origin HEAD:agent/xnnpack-experiment
