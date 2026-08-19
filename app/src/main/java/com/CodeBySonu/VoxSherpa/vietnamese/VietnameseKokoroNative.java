@@ -33,7 +33,7 @@ public final class VietnameseKokoroNative {
      * useNnapi requests the Android NNAPI execution provider; native code safely
      * falls back to CPU if the provider/session is unavailable for this device/model.
      */
-    public native boolean createEngine(String modelPath, int cpuThreads, boolean useNnapi);
+    public native boolean createEngine(String modelPath, int cpuThreads, boolean useNnapi, boolean useXnnpack);
     public native void destroyEngine();
     public native float[] synthesize(long[] inputIds, float[] refStyle, float speed);
 
@@ -43,7 +43,10 @@ public final class VietnameseKokoroNative {
     /** True only when the live ONNX session actually has NNAPI enabled. */
     public native boolean isNnapiActive();
 
-    /** lockWaitUs, inputPrepUs, ortRunUs, outputCopyUs, totalUs, activeThreads */
+    /** True only when the live ONNX session was created with XNNPACK EP. */
+    public native boolean isXnnpackActive();
+
+    /** lockWaitUs, inputPrepUs, ortRunUs, outputCopyUs, totalUs, ortCpuThreads, xnnpackThreads */
     public native long[] getLastInferenceTimingMicros();
 
     /**

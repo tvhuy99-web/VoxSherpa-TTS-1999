@@ -9,6 +9,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.CodeBySonu.VoxSherpa.BuildConfig;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroEngine;
 
 /** Accessible in-app diagnostics viewer/share screen for TTS failures and performance. */
@@ -16,6 +17,8 @@ public class TtsDiagnosticsActivity extends Activity {
     private TextView output;
     private Button benchmark;
     private Button nnapi;
+    private Button cpuBackend;
+    private Button xnnpackBackend;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +53,26 @@ public class TtsDiagnosticsActivity extends Activity {
 
         root.addView(actions);
 
+        if (BuildConfig.KOKORO_XNNPACK_AB) {
+            TextView backendTitle = new TextView(this);
+            backendTitle.setText("Kokoro runtime A/B — CPU vs XNNPACK, same ORT 1.26.0");
+            backendTitle.setTextSize(16f);
+            backendTitle.setPadding(0, pad, 0, 0);
+            root.addView(backendTitle);
+
+            cpuBackend = new Button(this);
+            cpuBackend.setContentDescription("Use CPU with ONNX Runtime 1.26.0. The session is rebuilt and warmed before testing.");
+            cpuBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_CPU));
+            root.addView(cpuBackend, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            xnnpackBackend = new Button(this);
+            xnnpackBackend.setContentDescription("Use XNNPACK with ONNX Runtime 1.26.0. XNNPACK uses its dedicated threadpool and the same Kokoro model and voice.");
+            xnnpackBackend.setOnClickListener(v -> switchRuntimeBackend(VietnameseKokoroEngine.BACKEND_XNNPACK));
+            root.addView(xnnpackBackend, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
         nnapi = new Button(this);
         nnapi.setContentDescription(
                 "Toggle the optional Android NNAPI accelerator for Vietnamese Kokoro. "
@@ -59,6 +82,7 @@ public class TtsDiagnosticsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         ));
+        if (BuildConfig.KOKORO_XNNPACK_AB) nnapi.setVisibility(android.view.View.GONE);
 
         benchmark = new Button(this);
         benchmark.setText("CPU benchmark: default / 3 / 4 / 5 / 6");
@@ -70,6 +94,7 @@ public class TtsDiagnosticsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
         ));
+        if (BuildConfig.KOKORO_XNNPACK_AB) benchmark.setVisibility(android.view.View.GONE);
 
         output = new TextView(this);
         output.setTextIsSelectable(true);
@@ -93,6 +118,53 @@ public class TtsDiagnosticsActivity extends Activity {
                 + VietnameseKokoroEngine.getInstance().performanceState(this);
         output.setText(snapshot + perf);
         refreshProviderButton();
+        refreshRuntimeButtons();
+    }
+
+    private void refreshRuntimeButtons() {
+        if (!BuildConfig.KOKORO_XNNPACK_AB || cpuBackend == null || xnnpackBackend == null) return;
+        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();
+        String requested = engine.requestedRuntimeBackend(this);
+        boolean xnnRequested = VietnameseKokoroEngine.BACKEND_XNNPACK.equals(requested);
+        cpuBackend.setText(!xnnRequested ? "CPU • ORT 1.26.0 — SELECTED" : "CPU • ORT 1.26.0 — use this mode");
+        xnnpackBackend.setText(xnnRequested
+                ? (engine.isXnnpackActive() ? "XNNPACK • ORT 1.26.0 — SELECTED / ACTIVE"
+                        : "XNNPACK • ORT 1.26.0 — SELECTED / FALLBACK CPU")
+                : "XNNPACK • ORT 1.26.0 — use this mode");
+    }
+
+    private void switchRuntimeBackend(String backend) {
+        if (!BuildConfig.KOKORO_XNNPACK_AB || cpuBackend == null || xnnpackBackend == null) return;
+        VietnameseKokoroEngine engine = VietnameseKokoroEngine.getInstance();
+        final boolean xnn = VietnameseKokoroEngine.BACKEND_XNNPACK.equals(backend);
+        cpuBackend.setEnabled(false);
+        xnnpackBackend.setEnabled(false);
+        cpuBackend.setText(xnn ? "CPU • ORT 1.26.0" : "Switching to CPU…");
+        xnnpackBackend.setText(xnn ? "Switching to XNNPACK…" : "XNNPACK • ORT 1.26.0");
+        TtsDiagnostics.info(this, "provider", "ui_backend_requested",
+                "User requested runtime backend=" + backend + " for controlled CPU/XNNPACK A/B.");
+        new Thread(() -> {
+            try {
+                String active = engine.setRuntimeBackend(this, backend);
+                runOnUiThread(() -> {
+                    cpuBackend.setEnabled(true);
+                    xnnpackBackend.setEnabled(true);
+                    refresh();
+                    String message = xnn && !VietnameseKokoroEngine.BACKEND_XNNPACK.equals(active)
+                            ? "XNNPACK could not stay active; CPU fallback is active. See the log."
+                            : "Runtime switched to " + active + " and warmed. You can test TalkBack now.";
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                });
+            } catch (Throwable t) {
+                TtsDiagnostics.error(this, "provider", "ui_backend_switch_failed", t.toString(), t);
+                runOnUiThread(() -> {
+                    cpuBackend.setEnabled(true);
+                    xnnpackBackend.setEnabled(true);
+                    refresh();
+                    Toast.makeText(this, "Runtime switch failed. See TTS Logs.", Toast.LENGTH_LONG).show();
+                });
+            }
+        }, "KokoroVi-XNNPACK-Switch").start();
     }
 
     private void refreshProviderButton() {
