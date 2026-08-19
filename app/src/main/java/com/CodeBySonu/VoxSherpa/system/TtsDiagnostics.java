@@ -6,7 +6,9 @@ import android.content.res.AssetFileDescriptor;
 import android.os.Build;
 import android.util.Log;
 
+import com.CodeBySonu.VoxSherpa.VietnameseGenerateIntegration;
 import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative;
+import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -118,13 +120,45 @@ public final class TtsDiagnostics {
         appendAsset(out, context, "kokoro_vi/kokoro_vi.onnx");
         appendAsset(out, context, "kokoro_vi/sea_g2p.bin");
         appendAsset(out, context, "kokoro_vi/config.json");
-        appendAsset(out, context, "kokoro_vi/voicepacks/diem_trinh.f32le");
+
+        int voiceOk = 0;
+        for (VietnameseKokoroVoice voice : VietnameseKokoroVoice.all()) {
+            if (assetExists(context, voice.assetPath)) voiceOk++;
+        }
+        out.append("Bundled Vietnamese voices: ").append(voiceOk).append('/')
+                .append(VietnameseKokoroVoice.all().size()).append(" OK\n");
+        for (VietnameseKokoroVoice voice : VietnameseKokoroVoice.all()) {
+            out.append("Voice ").append(voice.id).append(" (" + voice.displayName + "): ")
+                    .append(assetExists(context, voice.assetPath) ? "OK" : "MISSING").append('\n');
+        }
+        String systemVoice = context.getSharedPreferences("sp1", Context.MODE_PRIVATE)
+                .getString("default_voice_Vietnamese", VietnameseKokoroVoice.DEFAULT.androidVoiceName);
+        out.append("System Vietnamese default: ").append(systemVoice).append('\n');
+        out.append("Generate Vietnamese active: ").append(VietnameseGenerateIntegration.isBundledActive(context));
+        if (VietnameseGenerateIntegration.isBundledActive(context)) {
+            out.append(" voice=").append(VietnameseGenerateIntegration.getActiveVoice(context).id);
+        }
+        out.append('\n');
+
         File log = getLogFile(context);
         out.append("Persistent log: ").append(log.getAbsolutePath())
                 .append(" bytes=").append(log.exists() ? log.length() : 0).append("\n\n");
         out.append("--- Recent events ---\n");
         out.append(read(context));
         return out.toString();
+    }
+
+    private static boolean assetExists(Context context, String path) {
+        try (AssetFileDescriptor afd = context.getAssets().openFd(path)) {
+            return afd.getLength() >= 0;
+        } catch (Throwable ignored) {
+            try {
+                context.getAssets().open(path).close();
+                return true;
+            } catch (Throwable missing) {
+                return false;
+            }
+        }
     }
 
     private static void appendAsset(StringBuilder out, Context context, String path) {
