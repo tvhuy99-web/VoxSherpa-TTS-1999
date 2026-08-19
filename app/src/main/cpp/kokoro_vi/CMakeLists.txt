@@ -25,10 +25,6 @@ set_target_properties(onnxruntime PROPERTIES
 )
 
 add_library(sea_g2p_android SHARED IMPORTED)
-# The Rust cdylib currently has no DT_SONAME. Without IMPORTED_NO_SONAME CMake
-# passes its absolute runner path to the linker, which then becomes a DT_NEEDED
-# entry such as /home/runner/work/.../libsea_g2p_android.so. Android cannot
-# resolve that path on-device, so the Vietnamese backend silently fails to load.
 set_target_properties(sea_g2p_android PROPERTIES
     IMPORTED_LOCATION "${JNI_LIB_DIR}/libsea_g2p_android.so"
     IMPORTED_NO_SONAME TRUE
@@ -38,4 +34,5 @@ add_library(voxsherpa_kokoro_vi SHARED kokoro_vi_jni.cpp)
 target_include_directories(voxsherpa_kokoro_vi PRIVATE "${ORT_INCLUDE_DIR}")
 find_library(log_lib log)
 find_library(android_lib android)
-target_link_libraries(voxsherpa_kokoro_vi onnxruntime sea_g2p_android ${android_lib} ${log_lib})
+find_library(dl_lib dl)
+target_link_libraries(voxsherpa_kokoro_vi onnxruntime sea_g2p_android ${android_lib} ${log_lib} ${dl_lib})
