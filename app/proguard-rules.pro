@@ -17,3 +17,17 @@
 # JNI symbols use this exact Java class name; never repackage/rename it.
 -keep class com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative { *; }
 -keepnames class com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroNative
+
+# VietnameseGenerateIntegration intentionally reflects into the legacy generated fragment so
+# Piper/Sherpa-Kokoro keep their original code path. R8 previously renamed these private fields,
+# causing publish_failed after Vietnamese PCM generation completed successfully.
+-keepclassmembers class com.CodeBySonu.VoxSherpa.GenerateFragmentActivity {
+    byte[] lastGeneratedPcmData;
+    int lastGeneratedSampleRate;
+    boolean isAudioGeneratedForCurrentText;
+    java.lang.String lastGeneratedText;
+    boolean isGenerating;
+    boolean isCancelled;
+    android.media.AudioTrack audioTrack;
+    com.CodeBySonu.VoxSherpa.GenerationParams lastParams;
+}
