@@ -9,7 +9,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 
-/** Installs the large model/G2P files into private storage once so native code can open them. */
+/** Installs the shared Kokoro model/G2P once and voicepacks lazily on first use. */
 public final class VietnameseKokoroAssetStore {
     private static final String ROOT = "kokoro_vi";
     private static final String MODEL = ROOT + "/kokoro_vi.onnx";
@@ -19,6 +19,7 @@ public final class VietnameseKokoroAssetStore {
     public static final class Paths {
         public final File model;
         public final File dictionary;
+        /** Default voicepack copied during initial prepare so prewarm never waits on a later copy. */
         public final File voicepack;
 
         private Paths(File model, File dictionary, File voicepack) {
@@ -35,11 +36,19 @@ public final class VietnameseKokoroAssetStore {
         boolean nativeAvailable = VietnameseKokoroNative.isAvailable();
         boolean assets = assetExists(context, MODEL)
                 && assetExists(context, DICTIONARY)
-                && assetExists(context, CONFIG)
-                && assetExists(context, VietnameseKokoroVoice.DIEM_TRINH.assetPath);
+                && assetExists(context, CONFIG);
+        if (assets) {
+            for (VietnameseKokoroVoice voice : VietnameseKokoroVoice.all()) {
+                if (!assetExists(context, voice.assetPath)) {
+                    assets = false;
+                    break;
+                }
+            }
+        }
         if (!nativeAvailable || !assets) {
             TtsDiagnostics.warn(context, "assets", "bundle_probe_failed",
                     "nativeAvailable=" + nativeAvailable + ", assetsPresent=" + assets
+                            + ", expectedVoices=" + VietnameseKokoroVoice.all().size()
                             + ", nativeError=" + VietnameseKokoroNative.loadError());
         }
         return nativeAvailable && assets;
@@ -47,23 +56,38 @@ public final class VietnameseKokoroAssetStore {
 
     public static synchronized Paths ensure(Context context) throws Exception {
         if (!isBundled(context)) {
-            throw new IllegalStateException("Vietnamese Kokoro Stage-1 assets/native backend are not available. nativeError="
+            throw new IllegalStateException("Vietnamese Kokoro bundle is incomplete. nativeError="
                     + VietnameseKokoroNative.loadError());
         }
         long started = System.nanoTime();
+        File root = ensureRoot(context);
+        File model = copyIfNeeded(context, MODEL, new File(root, "kokoro_vi.onnx"));
+        File dictionary = copyIfNeeded(context, DICTIONARY, new File(root, "sea_g2p.bin"));
+        File defaultVoice = ensureVoice(context, VietnameseKokoroVoice.DEFAULT);
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
+        TtsDiagnostics.info(context, "assets", "ready",
+                "elapsedMs=" + elapsedMs + ", modelBytes=" + model.length()
+                        + ", dictionaryBytes=" + dictionary.length()
+                        + ", defaultVoiceBytes=" + defaultVoice.length()
+                        + ", bundledVoices=" + VietnameseKokoroVoice.all().size());
+        return new Paths(model, dictionary, defaultVoice);
+    }
+
+    public static synchronized File ensureVoice(Context context, VietnameseKokoroVoice voice) throws Exception {
+        if (context == null || voice == null) throw new IllegalArgumentException("Voice/context required.");
+        if (!assetExists(context, voice.assetPath)) {
+            throw new IllegalStateException("Missing bundled Vietnamese voicepack: " + voice.id);
+        }
+        File root = ensureRoot(context);
+        return copyIfNeeded(context, voice.assetPath, new File(root, voice.id + ".f32le"));
+    }
+
+    private static File ensureRoot(Context context) {
         File root = new File(context.getFilesDir(), ROOT);
         if (!root.exists() && !root.mkdirs()) {
             throw new IllegalStateException("Cannot create Vietnamese Kokoro data directory.");
         }
-        File model = copyIfNeeded(context, MODEL, new File(root, "kokoro_vi.onnx"));
-        File dictionary = copyIfNeeded(context, DICTIONARY, new File(root, "sea_g2p.bin"));
-        File voice = copyIfNeeded(context, VietnameseKokoroVoice.DIEM_TRINH.assetPath,
-                new File(root, "diem_trinh.f32le"));
-        long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
-        TtsDiagnostics.info(context, "assets", "ready",
-                "elapsedMs=" + elapsedMs + ", modelBytes=" + model.length()
-                        + ", dictionaryBytes=" + dictionary.length() + ", voiceBytes=" + voice.length());
-        return new Paths(model, dictionary, voice);
+        return root;
     }
 
     private static boolean assetExists(Context context, String path) {
