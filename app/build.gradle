@@ -18,9 +18,9 @@ def enableKokoroViStage1 = project.hasProperty('kokoroViStage1') &&
 def explicitVersionCode = System.getenv('VOX_VERSION_CODE')
 def githubRunNumber = System.getenv('GITHUB_RUN_NUMBER')
 def resolvedVersionCode = explicitVersionCode ? explicitVersionCode.toInteger() :
-        (githubRunNumber ? 100000 + githubRunNumber.toInteger() : 25)
+        (githubRunNumber ? 100000 + githubRunNumber.toInteger() : 26)
 def explicitVersionName = System.getenv('VOX_VERSION_NAME')
-def resolvedVersionName = explicitVersionName ?: '4.1.2'
+def resolvedVersionName = explicitVersionName ?: '4.1.3'
 def stableStorePath = System.getenv('VOX_SIGNING_STORE_FILE')
 def stableStorePassword = System.getenv('VOX_SIGNING_STORE_PASSWORD')
 def stableKeyAlias = System.getenv('VOX_SIGNING_KEY_ALIAS')
