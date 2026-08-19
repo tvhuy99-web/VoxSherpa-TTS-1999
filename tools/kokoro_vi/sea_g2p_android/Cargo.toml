@@ -1,0 +1,24 @@
+[package]
+name = "sea-g2p-android"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Android FFI adapter for the Apache-2.0 sea-g2p phonemizer"
+
+[lib]
+name = "sea_g2p_android"
+crate-type = ["cdylib"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+strip = "symbols"
+
+[dependencies]
+regex = "1.10"
+fancy-regex = "0.13"
+once_cell = "1.19"
+memmap2 = "0.9"
+rayon = "1.10"
+unicode-normalization = "0.1"

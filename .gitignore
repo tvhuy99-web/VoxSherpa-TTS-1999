@@ -8,3 +8,15 @@
 .externalNativeBuild
 .cxx
 app/build/
+
+# Kokoro Vietnamese Stage-1 generated/downloaded build inputs.
+# Only the tiny config.json remains versioned; generated binary assets stay out of Git.
+app/src/main/assets/kokoro_vi/kokoro_vi.onnx
+app/src/main/assets/kokoro_vi/sea_g2p.bin
+app/src/main/assets/kokoro_vi/voicepacks/*.f32le
+app/src/main/jniLibs/arm64-v8a/libonnxruntime.so
+app/src/main/jniLibs/arm64-v8a/libsea_g2p_android.so
+app/src/main/jniLibs/x86_64/libonnxruntime.so
+app/src/main/jniLibs/x86_64/libsea_g2p_android.so
+app/src/main/cpp/kokoro_vi/onnxruntime_headers/
+.kokoro-vi-work/
