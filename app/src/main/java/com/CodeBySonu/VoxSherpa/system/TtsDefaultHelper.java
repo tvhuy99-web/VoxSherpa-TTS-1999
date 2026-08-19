@@ -31,8 +31,8 @@ public class TtsDefaultHelper {
         boolean announceVietnamese = false;
 
         try {
-            // This device benchmarked four ORT threads faster than six. Keep four as the
-            // first-run default; a later benchmark can still overwrite this preference.
+            // The user's on-device benchmark selected four ORT threads over six. Use four
+            // as the first-run default; the benchmark remains free to overwrite this later.
             if (!perf.contains("cpu_threads")) {
                 perf.edit().putInt("cpu_threads", 4).apply();
                 TtsDiagnostics.info(app, "defaults", "cpu_default_initialized",
@@ -42,28 +42,42 @@ public class TtsDefaultHelper {
             SharedPreferences.Editor sp1Editor = sp1.edit();
             SharedPreferences.Editor sp5Editor = sp5.edit();
 
-            // IMPORTANT: bundled Vietnamese is a first-class primary TTS voice even when
-            // sp1.models_data is empty. Do not gate this block on downloaded models.
+            // Bundled Vietnamese must use the same default_voice_*/sys_tts_* path as an
+            // installed model. Previously this entire sync returned early while models_data=[]
+            // which left bundled Vietnamese on a separate path.
             if (bundledVietnamese) {
-                if (sp1.getString(VI_DEFAULT_KEY, "").isEmpty()) {
-                    sp1Editor.putString(VI_DEFAULT_KEY,
-                            VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
+                String selectedViVoice = sp1.getString(VI_DEFAULT_KEY, "");
+                if (selectedViVoice.isEmpty()) {
+                    selectedViVoice = VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName;
+                    sp1Editor.putString(VI_DEFAULT_KEY, selectedViVoice);
                     dataChanged = true;
                 }
 
-                String existingVi = sp5.getString(VI_SYS_KEY, "");
-                if (existingVi.isEmpty()) {
-                    org.json.JSONObject sysJson = new org.json.JSONObject();
-                    sysJson.put("model_type", "kokoro_vi");
-                    sysJson.put("voice_name", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
-                    sysJson.put("onnx_path", "bundled://kokoro_vi/kokoro_vi.onnx");
-                    sysJson.put("tokens_path", "bundled://kokoro_vi/config.json");
-                    sysJson.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
-                    sysJson.put("speaker_id", "0");
-                    sp5Editor.putString(VI_SYS_KEY, sysJson.toString());
-                    dataChanged = true;
-                    TtsDiagnostics.info(app, "defaults", "bundled_vi_registered",
-                            "Registered Diem Trinh in the same sp1/sp5 System-TTS default path used by installed models.");
+                // Keep sp5 aligned whenever the bundled voice is the selected Vietnamese default.
+                // If the user explicitly selects a different manually-installed Vietnamese voice,
+                // do not overwrite that choice.
+                if (VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName.equals(selectedViVoice)) {
+                    String existingVi = sp5.getString(VI_SYS_KEY, "");
+                    boolean alreadyBundled = false;
+                    if (!existingVi.isEmpty()) {
+                        try {
+                            alreadyBundled = "kokoro_vi".equals(
+                                    new org.json.JSONObject(existingVi).optString("model_type", ""));
+                        } catch (Throwable ignored) {}
+                    }
+                    if (!alreadyBundled) {
+                        org.json.JSONObject sysJson = new org.json.JSONObject();
+                        sysJson.put("model_type", "kokoro_vi");
+                        sysJson.put("voice_name", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
+                        sysJson.put("onnx_path", "bundled://kokoro_vi/kokoro_vi.onnx");
+                        sysJson.put("tokens_path", "bundled://kokoro_vi/config.json");
+                        sysJson.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
+                        sysJson.put("speaker_id", "0");
+                        sp5Editor.putString(VI_SYS_KEY, sysJson.toString());
+                        dataChanged = true;
+                        TtsDiagnostics.info(app, "defaults", "bundled_vi_registered",
+                                "Registered Diem Trinh in the same sp1/sp5 System-TTS default path used by installed models.");
+                    }
                 }
 
                 if (!sp5.getBoolean(VI_ANNOUNCED_KEY, false)) {
@@ -168,14 +182,12 @@ public class TtsDefaultHelper {
                 sp5Editor.apply();
             }
 
-            // Android documents this broadcast as the signal that the engine's available
-            // language/voice data changed. Announce the bundled voice once after registration.
+            // Android defines this broadcast as the signal that available TTS data changed.
+            // It must be visible to the system, not restricted back to this app package.
             if (announceVietnamese) {
-                Intent changed = new Intent(TextToSpeech.Engine.ACTION_TTS_DATA_INSTALLED);
-                changed.setPackage(app.getPackageName());
-                app.sendBroadcast(changed);
+                app.sendBroadcast(new Intent(TextToSpeech.Engine.ACTION_TTS_DATA_INSTALLED));
                 TtsDiagnostics.info(app, "defaults", "tts_data_announced",
-                        "Announced bundled Vietnamese TTS data after first-class registration.");
+                        "Announced bundled Vietnamese TTS data globally after first-class registration.");
             }
         } catch (Throwable t) {
             TtsDiagnostics.error(app, "defaults", "sync_failed", t.toString(), t);
