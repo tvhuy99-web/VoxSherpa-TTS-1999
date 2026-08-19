@@ -68,7 +68,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
 
-      - name: Verify Stage-1 APK native linkage and assets
+      - name: Verify Stage-1 APK native linkage and all voice assets
         shell: bash
         run: |
           set -euo pipefail
@@ -87,9 +87,14 @@ jobs:
           echo "$NEEDED" | grep -F 'Shared library: [libonnxruntime.so]'
           unzip -l "$APK" | grep -F 'assets/kokoro_vi/kokoro_vi.onnx'
           unzip -l "$APK" | grep -F 'assets/kokoro_vi/sea_g2p.bin'
-          unzip -l "$APK" | grep -F 'assets/kokoro_vi/voicepacks/diem_trinh.f32le'
           unzip -l "$APK" | grep -F 'lib/arm64-v8a/libsea_g2p_android.so'
           unzip -l "$APK" | grep -F 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so'
+          voices=(diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy)
+          for voice in "${voices[@]}"; do
+            unzip -l "$APK" | grep -F "assets/kokoro_vi/voicepacks/${voice}.f32le"
+          done
+          count=$(unzip -l "$APK" | grep -c 'assets/kokoro_vi/voicepacks/.*\.f32le')
+          test "$count" -eq 14 || { echo "Expected 14 Vietnamese voicepacks, found $count" >&2; exit 1; }
 
       - name: Upload Stage-1 APK
         uses: actions/upload-artifact@v4
