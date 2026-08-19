@@ -39,6 +39,7 @@ std::mutex g_run_options_mutex;
 Ort::RunOptions* g_active_run_options = nullptr;
 std::atomic<bool> g_cancel_requested{false};
 std::atomic<bool> g_active_nnapi{false};
+std::atomic<bool> g_active_qnn_gpu{false};
 std::array<int64_t, 6> g_last_timing_us{0,0,0,0,0,0};
 int g_active_threads = 0;
 
@@ -96,7 +97,22 @@ void append_nnapi(Ort::SessionOptions& options) {
     }
 }
 
-std::unique_ptr<Ort::Session> create_session(const std::string& path, int cpu_threads, bool use_nnapi) {
+void append_qnn_gpu(Ort::SessionOptions& options) {
+    const char* keys[] = {"backend_path"};
+    const char* values[] = {"libQnnGpu.so"};
+    const OrtApi& api = Ort::GetApi();
+    OrtStatus* status = api.SessionOptionsAppendExecutionProvider(
+            options, "QNN", keys, values, 1);
+    if (status != nullptr) {
+        const char* raw = api.GetErrorMessage(status);
+        std::string message = raw == nullptr ? "unknown QNN GPU provider error" : raw;
+        api.ReleaseStatus(status);
+        throw std::runtime_error("Cannot enable QNN GPU: " + message);
+    }
+}
+
+std::unique_ptr<Ort::Session> create_session(
+        const std::string& path, int cpu_threads, bool use_nnapi, bool use_qnn_gpu) {
     Ort::SessionOptions options;
     // cpu_threads == 0 intentionally leaves ORT in its default intra-op mode. With
     // sequential execution this also lets ORT choose its normal worker affinity.
@@ -104,7 +120,8 @@ std::unique_ptr<Ort::Session> create_session(const std::string& path, int cpu_th
     options.SetInterOpNumThreads(1);
     options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    if (use_nnapi) append_nnapi(options);
+    if (use_qnn_gpu) append_qnn_gpu(options);
+    else if (use_nnapi) append_nnapi(options);
     return std::make_unique<Ort::Session>(g_env, path.c_str(), options);
 }
 
@@ -230,37 +247,50 @@ extern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vietn
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_createEngine(
-        JNIEnv* env, jobject, jstring model_path, jint cpu_threads, jboolean use_nnapi) {
+        JNIEnv* env, jobject, jstring model_path, jint cpu_threads, jboolean use_nnapi, jboolean use_qnn_gpu) {
     const auto path = jstring_to_utf8(env, model_path);
     const bool requested_nnapi = use_nnapi == JNI_TRUE;
+    const bool requested_qnn_gpu = use_qnn_gpu == JNI_TRUE;
     terminate_active_run();
     try {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_session.reset();
-        if (requested_nnapi) {
+        g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
+        if (requested_qnn_gpu) {
             try {
-                g_session = create_session(path, cpu_threads, true);
+                g_session = create_session(path, cpu_threads, false, true);
+                g_active_qnn_gpu.store(true, std::memory_order_release);
+                LOGI("Vietnamese Kokoro loaded with QNN GPU + cpuThreads=%d", cpu_threads);
+            } catch (const std::exception& qnn_error) {
+                LOGW("QNN GPU session failed, falling back to CPU: %s", qnn_error.what());
+                g_session = create_session(path, cpu_threads, false, false);
+                LOGI("Vietnamese Kokoro CPU fallback after QNN GPU failure, cpuThreads=%d", cpu_threads);
+            }
+        } else if (requested_nnapi) {
+            try {
+                g_session = create_session(path, cpu_threads, true, false);
                 g_active_nnapi.store(true, std::memory_order_release);
                 LOGI("Vietnamese Kokoro loaded with NNAPI + cpuThreads=%d", cpu_threads);
             } catch (const std::exception& nnapi_error) {
                 LOGW("NNAPI session failed, falling back to CPU: %s", nnapi_error.what());
-                g_session = create_session(path, cpu_threads, false);
-                g_active_nnapi.store(false, std::memory_order_release);
+                g_session = create_session(path, cpu_threads, false, false);
                 LOGI("Vietnamese Kokoro CPU fallback loaded with cpuThreads=%d", cpu_threads);
             }
         } else {
-            g_session = create_session(path, cpu_threads, false);
-            g_active_nnapi.store(false, std::memory_order_release);
+            g_session = create_session(path, cpu_threads, false, false);
             LOGI("Vietnamese Kokoro loaded with CPU cpuThreads=%d (0=ORT default + auto affinity)", cpu_threads);
         }
         g_active_threads = cpu_threads;
         return JNI_TRUE;
     } catch (const Ort::Exception& e) {
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
         LOGE("ONNX load error: %s", e.what());
         throw_runtime(env, std::string("Vietnamese Kokoro model load failed: ") + e.what());
     } catch (const std::exception& e) {
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
         throw_runtime(env, std::string("Vietnamese Kokoro native load failed: ") + e.what());
     }
     return JNI_FALSE;
@@ -271,6 +301,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vietn
     std::lock_guard<std::mutex> lock(g_mutex);
     g_session.reset();
     g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_cancelActiveRun(JNIEnv*, jobject) {
@@ -281,6 +312,10 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_V
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isNnapiActive(JNIEnv*, jobject) {
     return g_active_nnapi.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isQnnGpuActive(JNIEnv*, jobject) {
+    return g_active_qnn_gpu.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_synthesize(JNIEnv* env, jobject, jlongArray input_ids, jfloatArray ref_style, jfloat speed) {
@@ -409,11 +444,12 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
 
         g_session.reset();
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
         for (int candidate : candidates) {
             CandidateBenchmark result;
             result.threads = candidate;
             auto load_start = Clock::now();
-            auto session = create_session(path, candidate, false);
+            auto session = create_session(path, candidate, false, false);
             result.load_ms = us_since(load_start) / 1000;
 
             for (size_t workload = 0; workload < workloads.size(); ++workload) {
@@ -449,9 +485,10 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
             }
         }
 
-        g_session = create_session(path, best_threads, false);
+        g_session = create_session(path, best_threads, false, false);
         g_active_threads = best_threads;
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_qnn_gpu.store(false, std::memory_order_release);
 
         std::ostringstream json;
         json << "{\"bestThreads\":" << best_threads

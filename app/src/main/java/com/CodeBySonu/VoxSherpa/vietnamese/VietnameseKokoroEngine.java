@@ -3,6 +3,7 @@ package com.CodeBySonu.VoxSherpa.vietnamese;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.CodeBySonu.VoxSherpa.BuildConfig;
 import com.CodeBySonu.VoxSherpa.Sonic;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 
@@ -60,6 +61,7 @@ public final class VietnameseKokoroEngine {
     private volatile boolean modelReady;
     private volatile boolean modelWarm;
     private volatile boolean activeNnapi;
+    private volatile boolean activeQnnGpu;
     private volatile int activeCpuThreads = 0;
     private Map<Character, Long> vocab = new HashMap<>();
     private final LinkedHashMap<String, float[]> voiceStyleCache =
@@ -133,13 +135,25 @@ public final class VietnameseKokoroEngine {
         return activeNnapi;
     }
 
+    public boolean isQnnGpuActive() {
+        return activeQnnGpu;
+    }
+
+    private String activeProviderLabel() {
+        if (activeQnnGpu) return "QNN_GPU";
+        if (activeNnapi) return "NNAPI";
+        return "CPU";
+    }
+
     public String performanceState(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
         int saved = prefs.getInt(PREF_CPU_THREADS, 0);
         boolean nnapiRequested = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         synchronized (this) {
             return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm
-                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")
+                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + activeProviderLabel()
+                    + ", qnnGpuBuild=" + BuildConfig.KOKORO_QNN_GPU_DEFAULT
+                    + ", qnnGpuLibrary=" + VietnameseKokoroNative.isQnnGpuLibraryAvailable()
                     + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads
                     + ", savedCpuThreads=" + saved + " (0=ORT default/auto-affinity)"
                     + ", cachedVoiceStyles=" + voiceStyleCache.size();
@@ -222,6 +236,7 @@ public final class VietnameseKokoroEngine {
         modelReady = false;
         modelWarm = false;
         activeNnapi = false;
+        activeQnnGpu = false;
 
         prepare(app);
         if (!modelWarm && !warmCurrentSession(app, "provider_switch")) {
@@ -506,6 +521,7 @@ public final class VietnameseKokoroEngine {
         modelReady = false;
         modelWarm = false;
         activeNnapi = false;
+        activeQnnGpu = false;
         assets = null;
         vocab.clear();
         voiceStyleCache.clear();
@@ -517,7 +533,8 @@ public final class VietnameseKokoroEngine {
         appContext = app;
         long totalStart = System.nanoTime();
         SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
-        boolean restoreNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
+        boolean restoreAccelerator = BuildConfig.KOKORO_QNN_GPU_DEFAULT
+                || prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         TtsDiagnostics.info(app, "benchmark", "cpu_start",
                 "Testing ORT default/3/4/6 across short/medium TalkBack workloads; "
                         + "1 warmup + 2 measured runs per workload. TTS requests may briefly block during this benchmark.");
@@ -532,6 +549,7 @@ public final class VietnameseKokoroEngine {
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
+        activeQnnGpu = false;
             throw e;
         }
         JSONObject result = new JSONObject(json);
@@ -541,12 +559,14 @@ public final class VietnameseKokoroEngine {
         modelReady = true;
         modelWarm = false;
         activeNnapi = false;
+        activeQnnGpu = false;
 
-        if (restoreNnapi) {
+        if (restoreAccelerator) {
             nativeBridge.destroyEngine();
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
+        activeQnnGpu = false;
             prepare(app);
             if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_nnapi")) {
                 throw new IllegalStateException("Vietnamese Kokoro benchmark restore warm-up was interrupted.");
@@ -558,7 +578,7 @@ public final class VietnameseKokoroEngine {
         TtsDiagnostics.info(app, "benchmark", "cpu_complete",
                 "elapsedMs=" + elapsedMs(totalStart) + ", result=" + json
                         + ", selected=" + threadLabel(best) + ", providerAfterBenchmark="
-                        + (activeNnapi ? "NNAPI" : "CPU"));
+                        + activeProviderLabel());
         return json;
     }
 
@@ -586,10 +606,22 @@ public final class VietnameseKokoroEngine {
             long started = System.nanoTime();
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
             activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 0);
-            boolean requestedNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
-            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);
+            boolean requestedQnnGpu = BuildConfig.KOKORO_QNN_GPU_DEFAULT;
+            boolean requestedNnapi = !requestedQnnGpu && prefs.getBoolean(PREF_NNAPI_ENABLED, false);
+            if (requestedQnnGpu && !VietnameseKokoroNative.isQnnGpuLibraryAvailable()) {
+                TtsDiagnostics.warn(context, "provider", "qnn_gpu_library_unavailable",
+                        "QNN GPU experiment requested but libQnnGpu/libQnnSystem could not be preloaded: "
+                                + VietnameseKokoroNative.qnnGpuLoadError());
+            }
+            modelReady = nativeBridge.createEngine(
+                    assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi, requestedQnnGpu);
             if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");
+            activeQnnGpu = nativeBridge.isQnnGpuActive();
             activeNnapi = nativeBridge.isNnapiActive();
+            if (requestedQnnGpu && !activeQnnGpu) {
+                TtsDiagnostics.warn(context, "provider", "qnn_gpu_fallback",
+                        "QNN GPU session could not be created for this device/model; native backend fell back to CPU.");
+            }
             if (requestedNnapi && !activeNnapi) {
                 prefs.edit().putBoolean(PREF_NNAPI_ENABLED, false).apply();
                 TtsDiagnostics.warn(context, "provider", "nnapi_auto_disabled",
@@ -597,7 +629,8 @@ public final class VietnameseKokoroEngine {
             }
             TtsDiagnostics.info(context, "engine", "model_ready",
                     "elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()
-                            + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")
+                            + ", provider=" + activeProviderLabel()
+                            + ", qnnGpuRequested=" + requestedQnnGpu
                             + ", cpuThreads=" + threadLabel(activeCpuThreads));
         }
     }
@@ -662,7 +695,7 @@ public final class VietnameseKokoroEngine {
         if (appContext != null) {
             TtsDiagnostics.info(appContext, "profile", "chunk",
                     "purpose=" + purpose + ", voice=" + voice.id + ", provider="
-                            + (activeNnapi ? "NNAPI" : "CPU") + ", textChars=" + text.length()
+                            + activeProviderLabel() + ", textChars=" + text.length()
                             + ", phonemeChars=" + phonemes.length() + ", tokenIds=" + ids.length
                             + ", audioSamples=" + (audio == null ? 0 : audio.length)
                             + ", g2pMs=" + g2pMs + ", tokenizeMs=" + tokenizeMs
