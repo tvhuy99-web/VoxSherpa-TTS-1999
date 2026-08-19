@@ -17,7 +17,7 @@ import com.CodeBySonu.VoxSherpa.vietnamese.VietnameseKokoroVoice;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-/** Unified TTS settings screen: downloaded voices and bundled Vietnamese use the same selection path. */
+/** Unified TTS settings screen: downloaded voices and all bundled Vietnamese voices share one path. */
 public class VietnameseTtssettingsActivity extends TtssettingsActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,23 +27,25 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
         VietnameseKokoroEngine.getInstance().prewarmAsync(this, "vietnamese_settings_opened");
 
         TtsDiagnostics.info(this, "settings", "vietnamese_settings_opened",
-                "Unified Vietnamese-aware TTS settings screen opened; primary defaults synchronized and prewarm requested.");
+                "Unified Vietnamese-aware TTS settings screen opened; bundledVoices="
+                        + VietnameseKokoroVoice.all().size());
 
-        injectBundledVietnameseVoice();
+        injectBundledVietnameseVoices();
         View content = findViewById(android.R.id.content);
         if (content != null) {
-            content.post(this::injectBundledVietnameseVoice);
-            content.postDelayed(this::injectBundledVietnameseVoice, 250L);
+            content.post(this::injectBundledVietnameseVoices);
+            content.postDelayed(this::injectBundledVietnameseVoices, 250L);
         }
         installDiagnosticsMenu();
     }
 
     @SuppressWarnings("unchecked")
-    private void injectBundledVietnameseVoice() {
+    private void injectBundledVietnameseVoices() {
         boolean nativeAvailable = VietnameseKokoroNative.isAvailable();
         boolean bundled = VietnameseKokoroEngine.isBundled(this);
         TtsDiagnostics.info(this, "settings", "vietnamese_voice_probe",
                 "nativeAvailable=" + nativeAvailable + ", bundled=" + bundled
+                        + ", expectedVoices=" + VietnameseKokoroVoice.all().size()
                         + ", groupedLanguageList=" + (groupedLanguageList != null)
                         + ", loadError=" + VietnameseKokoroNative.loadError());
 
@@ -78,7 +80,7 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             vietnameseGroup.put("voices", voices);
             groupedLanguageList.add(0, vietnameseGroup);
             TtsDiagnostics.info(this, "settings", "vietnamese_group_added",
-                    "Created first-class Installed Languages group for bundled Vietnamese.");
+                    "Created Installed Languages group for bundled Vietnamese.");
         } else {
             Object existingVoices = vietnameseGroup.get("voices");
             if (existingVoices instanceof ArrayList) {
@@ -90,41 +92,41 @@ public class VietnameseTtssettingsActivity extends TtssettingsActivity {
             vietnameseGroup.put("is_expanded", "true");
         }
 
-        HashMap<String, Object> voice = null;
-        for (HashMap<String, Object> existing : voices) {
-            Object id = existing.get("voice_id");
-            if (id != null && VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName.equals(id.toString())) {
-                voice = existing;
-                break;
+        int added = 0;
+        for (int registryIndex = 0; registryIndex < VietnameseKokoroVoice.all().size(); registryIndex++) {
+            VietnameseKokoroVoice registryVoice = VietnameseKokoroVoice.all().get(registryIndex);
+            HashMap<String, Object> voiceMap = null;
+            for (HashMap<String, Object> existing : voices) {
+                Object id = existing.get("voice_id");
+                if (id != null && registryVoice.androidVoiceName.equals(id.toString())) {
+                    voiceMap = existing;
+                    break;
+                }
             }
+            if (voiceMap == null) {
+                voiceMap = new HashMap<>();
+                voices.add(voiceMap);
+                added++;
+            }
+
+            voiceMap.put("voice_id", registryVoice.androidVoiceName);
+            voiceMap.put("display_name", registryVoice.displayName);
+            voiceMap.put("subtitle", "Bundled Kokoro Vietnamese • Offline • Installed");
+            voiceMap.put("is_kokoro", "true");
+            voiceMap.put("sample_url", "");
+            voiceMap.put("model_type", "kokoro_vi");
+            voiceMap.put("onnx_path", "bundled://kokoro_vi/kokoro_vi.onnx");
+            voiceMap.put("tokens_path", "bundled://kokoro_vi/config.json");
+            voiceMap.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/" + registryVoice.id + ".f32le");
+            voiceMap.put("speaker_id", Integer.toString(registryIndex));
         }
 
-        if (voice == null) {
-            voice = new HashMap<>();
-            voices.add(0, voice);
-            TtsDiagnostics.info(this, "settings", "vietnamese_voice_added",
-                    "Added bundled Diem Trinh to the primary Installed Languages list.");
-        }
-
-        voice.put("voice_id", VietnameseKokoroVoice.DIEM_TRINH.androidVoiceName);
-        voice.put("display_name", VietnameseKokoroVoice.DIEM_TRINH.displayName);
-        voice.put("subtitle", "Bundled Kokoro Vietnamese • Offline • Installed");
-        voice.put("is_kokoro", "true");
-        voice.put("sample_url", "");
-        voice.put("model_type", "kokoro_vi");
-        voice.put("onnx_path", "bundled://kokoro_vi/kokoro_vi.onnx");
-        voice.put("tokens_path", "bundled://kokoro_vi/config.json");
-        voice.put("voices_bin_path", "bundled://kokoro_vi/voicepacks/diem_trinh.f32le");
-        voice.put("speaker_id", "0");
-
-        // TtsDefaultHelper initializes Diem Trinh only when no Vietnamese default exists.
-        // This keeps the bundled voice on the main path without overwriting a later explicit
-        // choice of another manually-installed Vietnamese voice.
         TtsDefaultHelper.syncDefaultVoices(this);
-
         refreshVoiceListUi();
         TtsDiagnostics.info(this, "settings", "vietnamese_voice_visible",
-                "Unified list now contains Vietnamese group with voiceCount=" + voices.size());
+                "Unified list contains Vietnamese voiceCount=" + voices.size()
+                        + ", registryCount=" + VietnameseKokoroVoice.all().size()
+                        + ", newlyAdded=" + added);
     }
 
     private void refreshVoiceListUi() {
