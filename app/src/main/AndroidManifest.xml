@@ -20,6 +20,14 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/AppTheme">
 
+        <!-- Register bundled Vietnamese defaults and begin prewarm as soon as this
+             process exists, before Activities or the TextToSpeechService receive work. -->
+        <provider
+            android:name=".system.VietnameseTtsBootstrapProvider"
+            android:authorities="com.CodeBySonu.VoxSherpa.kokoro-vi-bootstrap"
+            android:exported="false"
+            android:initOrder="250" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
@@ -42,9 +50,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Keep the legacy Activity as a real component so explicit app/OEM launches
-             can never fail on activity-alias resolution. The app's Setup button and
-             Android TTS metadata route directly to VietnameseTtssettingsActivity. -->
         <activity
             android:name=".TtssettingsActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
