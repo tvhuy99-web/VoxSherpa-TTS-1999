@@ -10,7 +10,7 @@ WORK_DIR="${RUNNER_TEMP:-$ROOT/.kokoro-vi-work}"
 HF_REPO="contextboxai/Kokoro-Vietnamese"
 HF_REVISION="9f210d622209fcc216fe2ac6159fed2ff381cb8a"
 SEA_G2P_COMMIT="59001f6dc3ba729a4fb7c7d81f262b7447a68c21"
-ORT_VERSION="${ORT_VERSION:-1.28.0}"
+ORT_VERSION="${ORT_VERSION:-1.17.1}"
 VOICES=(
   diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen
   phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy

@@ -36,8 +36,7 @@ public final class VietnameseKokoroEngine {
     private static final String APP_PREFS = "sp3";
     private static final String PREF_CPU_THREADS = "cpu_threads";
     private static final String PREF_NNAPI_ENABLED = "nnapi_enabled";
-    private static final String WARMUP_TEXT =
-            "Xin chào, giọng đọc tiếng Việt đang được khởi động để phản hồi nhanh và ổn định hơn.";
+    private static final String WARMUP_TEXT = "Giọng nói chính.";
     private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.!?…]+(?:[\\\"”’)]*)");
     private static final Pattern EFFECT_TOKEN = Pattern.compile("(\\[[a-zA-Z]+\\]|\\.\\.\\.|[.,!?।])");
     private static final Pattern WORD_TOKEN = Pattern.compile("^[A-Za-zÀ-ỹĐđ]+(?:[-'][A-Za-zÀ-ỹĐđ]+)*$");
@@ -177,21 +176,23 @@ public final class VietnameseKokoroEngine {
     private synchronized void prewarmBlocking(Context context, String reason) throws Exception {
         prepare(context);
         if (modelWarm) return;
-        warmCurrentSession(context, "prewarm:" + reason);
+        if (!warmCurrentSession(context, "prewarm:" + reason)) {
+            TtsDiagnostics.warn(context, "prewarm", "warmup_interrupted",
+                    "reason=" + reason + ", session remains usable; the first successful real request will confirm warm state.");
+        }
     }
 
-    private void warmCurrentSession(Context context, String purpose) throws Exception {
+    private boolean warmCurrentSession(Context context, String purpose) throws Exception {
         long started = System.nanoTime();
         float[] audio = synthesizeChunk(WARMUP_TEXT, VietnameseKokoroVoice.DEFAULT, 1.0f, purpose);
-        modelWarm = audio != null && audio.length > 0;
+        boolean warmed = audio != null && audio.length > 0;
+        if (warmed) modelWarm = true;
         TtsDiagnostics.info(context, "prewarm", "representative_inference",
                 "purpose=" + purpose + ", voice=" + VietnameseKokoroVoice.DEFAULT.id
                         + ", textChars=" + WARMUP_TEXT.length()
                         + ", audioSamples=" + (audio == null ? 0 : audio.length)
-                        + ", elapsedMs=" + elapsedMs(started));
-        if (!modelWarm) {
-            throw new IllegalStateException("Vietnamese Kokoro warm-up inference returned no audio.");
-        }
+                        + ", warmed=" + warmed + ", elapsedMs=" + elapsedMs(started));
+        return warmed;
     }
 
     public void cancel() {
@@ -223,7 +224,9 @@ public final class VietnameseKokoroEngine {
         activeNnapi = false;
 
         prepare(app);
-        if (!modelWarm) warmCurrentSession(app, "provider_switch");
+        if (!modelWarm && !warmCurrentSession(app, "provider_switch")) {
+            throw new IllegalStateException("Vietnamese Kokoro provider warm-up was interrupted.");
+        }
 
         boolean active = activeNnapi;
         if (enabled && !active) {
@@ -516,15 +519,15 @@ public final class VietnameseKokoroEngine {
         SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
         boolean restoreNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         TtsDiagnostics.info(app, "benchmark", "cpu_start",
-                "Testing ORT default plus explicit CPU thread counts up to 8 across short/medium/long workloads; "
-                        + "1 warmup + 3 measured runs per workload. TTS requests may block during this benchmark.");
+                "Testing ORT default/3/4/6 across short/medium TalkBack workloads; "
+                        + "1 warmup + 2 measured runs per workload. TTS requests may briefly block during this benchmark.");
         prepare(app);
         String phonemes = phonemize(WARMUP_TEXT);
         long[] ids = tokenIds(phonemes);
         float[] style = selectStyle(VietnameseKokoroVoice.DEFAULT, phonemes.length());
         String json;
         try {
-            json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 1, 3);
+            json = nativeBridge.benchmarkCpuThreads(assets.model.getAbsolutePath(), ids, style, 1.0f, 1, 2);
         } catch (Exception e) {
             modelReady = false;
             modelWarm = false;
@@ -545,9 +548,11 @@ public final class VietnameseKokoroEngine {
             modelWarm = false;
             activeNnapi = false;
             prepare(app);
-            if (!modelWarm) warmCurrentSession(app, "benchmark_restore_nnapi");
-        } else {
-            warmCurrentSession(app, "benchmark_selected_cpu");
+            if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_nnapi")) {
+                throw new IllegalStateException("Vietnamese Kokoro benchmark restore warm-up was interrupted.");
+            }
+        } else if (!warmCurrentSession(app, "benchmark_selected_cpu")) {
+            throw new IllegalStateException("Vietnamese Kokoro selected CPU session warm-up was interrupted.");
         }
 
         TtsDiagnostics.info(app, "benchmark", "cpu_complete",
@@ -636,6 +641,14 @@ public final class VietnameseKokoroEngine {
         long nativeStart = System.nanoTime();
         float[] audio = nativeBridge.synthesize(ids, style, safeSpeed);
         long nativeCallMs = elapsedMs(nativeStart);
+        if (audio != null && audio.length > 0 && !modelWarm) {
+            modelWarm = true;
+            if (appContext != null) {
+                TtsDiagnostics.info(appContext, "prewarm", "session_confirmed_warm",
+                        "purpose=" + purpose + ", tokenIds=" + ids.length
+                                + ", nativeCallMs=" + nativeCallMs);
+            }
+        }
         long[] nativeTiming = nativeBridge.getLastInferenceTimingMicros();
         String nativeProfile = "";
         if (nativeTiming != null && nativeTiming.length >= 6) {

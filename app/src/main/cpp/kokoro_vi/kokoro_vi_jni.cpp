@@ -166,7 +166,9 @@ RunResult run_once(Ort::Session& session, const std::vector<int64_t>& ids,
 int64_t median_us(std::vector<int64_t> values) {
     if (values.empty()) return 0;
     std::sort(values.begin(), values.end());
-    return values[values.size() / 2];
+    const size_t mid = values.size() / 2;
+    if ((values.size() & 1u) != 0u) return values[mid];
+    return (values[mid - 1] + values[mid]) / 2;
 }
 
 std::vector<int64_t> resize_ids(const std::vector<int64_t>& base, size_t requested_size) {
@@ -384,18 +386,20 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
         env->ReleaseFloatArrayElements(ref_style, java_style, JNI_ABORT);
 
         const int warmups = std::max(1, static_cast<int>(warmup_runs));
-        const int measures = std::max(3, static_cast<int>(measured_runs));
+        const int measures = std::max(2, static_cast<int>(measured_runs));
         const unsigned int detected_cpus = std::thread::hardware_concurrency();
         const unsigned int online_cpus = detected_cpus == 0 ? 4u : detected_cpus;
-        const std::vector<int> candidates = cpu_thread_candidates(online_cpus);
+        std::vector<int> candidates{0};
+        for (int candidate : {3, 4, 6}) {
+            if (candidate <= static_cast<int>(online_cpus)) candidates.push_back(candidate);
+        }
+        if (candidates.size() == 1) candidates.push_back(std::max(1, std::min(4, static_cast<int>(online_cpus))));
 
-        const size_t medium_tokens = std::max<size_t>(24, std::min<size_t>(96, ids.size()));
-        const size_t short_tokens = std::max<size_t>(12, medium_tokens / 2);
-        const size_t long_tokens = std::min<size_t>(192, medium_tokens * 2);
-        const std::array<std::vector<int64_t>,3> workloads{
+        const size_t short_tokens = std::max<size_t>(12, std::min<size_t>(32, ids.size()));
+        const size_t medium_tokens = std::max<size_t>(36, std::min<size_t>(64, ids.size() * 2));
+        const std::array<std::vector<int64_t>,2> workloads{
                 resize_ids(ids, short_tokens),
-                resize_ids(ids, medium_tokens),
-                resize_ids(ids, long_tokens)
+                resize_ids(ids, medium_tokens)
         };
 
         std::vector<CandidateBenchmark> results;
@@ -424,10 +428,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
                 result.median_us[workload] = median_us(samples);
             }
 
-            // TalkBack is dominated by short utterances, so weight shorter workloads more.
-            result.score_us = result.median_us[0] * 3
-                    + result.median_us[1] * 2
-                    + result.median_us[2];
+            // TalkBack overwhelmingly favors short utterances; medium text prevents overfitting.
+            result.score_us = result.median_us[0] * 2 + result.median_us[1];
             if (result.score_us < raw_best_score) {
                 raw_best_score = result.score_us;
                 raw_best_threads = candidate;
@@ -440,8 +442,6 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
         bool preferred_ort_default_for_affinity = false;
         if (!results.empty() && raw_best_threads != 0) {
             const int64_t default_score = results.front().score_us;
-            // If ORT default is within 3% of the raw winner, keep default. It preserves
-            // ORT's automatic worker affinity and is less brittle across thermal states.
             if (default_score > 0
                     && static_cast<double>(default_score) <= static_cast<double>(raw_best_score) * 1.03) {
                 best_threads = 0;
@@ -460,7 +460,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
              << (preferred_ort_default_for_affinity ? "true" : "false")
              << ",\"onlineCpus\":" << online_cpus
              << ",\"workloadTokenCounts\":["
-             << workloads[0].size() << "," << workloads[1].size() << "," << workloads[2].size() << "]"
+             << workloads[0].size() << "," << workloads[1].size() << "]"
              << ",\"candidates\":[";
         for (size_t i = 0; i < results.size(); ++i) {
             if (i != 0) json << ",";
@@ -470,7 +470,6 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
                  << ",\"loadMs\":" << r.load_ms
                  << ",\"shortMedianUs\":" << r.median_us[0]
                  << ",\"mediumMedianUs\":" << r.median_us[1]
-                 << ",\"longMedianUs\":" << r.median_us[2]
                  << ",\"scoreUs\":" << r.score_us << "}";
         }
         json << "]}";
