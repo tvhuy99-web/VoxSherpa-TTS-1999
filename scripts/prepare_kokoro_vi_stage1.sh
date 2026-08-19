@@ -10,7 +10,7 @@ WORK_DIR="${RUNNER_TEMP:-$ROOT/.kokoro-vi-work}"
 HF_REPO="contextboxai/Kokoro-Vietnamese"
 HF_REVISION="9f210d622209fcc216fe2ac6159fed2ff381cb8a"
 SEA_G2P_COMMIT="59001f6dc3ba729a4fb7c7d81f262b7447a68c21"
-ORT_VERSION="1.17.1"
+ORT_VERSION="${ORT_VERSION:-1.28.0}"
 VOICES=(
   diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen
   phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy
@@ -44,10 +44,12 @@ model_size=$(wc -c < "$MODEL"); dict_size=$(wc -c < "$DICTIONARY")
 (( dict_size >= 50000000 )) || { echo "sea_g2p.bin is unexpectedly small: $dict_size" >&2; exit 1; }
 test -s "$ASSET_DIR/config.json"
 
-ORT_ZIP="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.zip"
+# Use Microsoft's official Maven-published Android AAR. The AAR contains both
+# libonnxruntime.so and the public C/C++ headers needed by our JNI bridge.
+ORT_AAR="$WORK_DIR/onnxruntime-android-${ORT_VERSION}.aar"
 ORT_EXTRACT="$WORK_DIR/onnxruntime-${ORT_VERSION}"
-fetch "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.zip" "$ORT_ZIP"
-rm -rf "$ORT_EXTRACT"; mkdir -p "$ORT_EXTRACT"; unzip -q "$ORT_ZIP" -d "$ORT_EXTRACT"
+fetch "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ORT_VERSION}/onnxruntime-android-${ORT_VERSION}.aar" "$ORT_AAR"
+rm -rf "$ORT_EXTRACT"; mkdir -p "$ORT_EXTRACT"; unzip -q "$ORT_AAR" -d "$ORT_EXTRACT"
 cp "$ORT_EXTRACT/jni/arm64-v8a/libonnxruntime.so" "$JNI_DIR/arm64-v8a/libonnxruntime.so"
 cp "$ORT_EXTRACT/jni/x86_64/libonnxruntime.so" "$JNI_DIR/x86_64/libonnxruntime.so"
 rm -rf "$CPP_DIR/onnxruntime_headers"; mkdir -p "$CPP_DIR/onnxruntime_headers"
@@ -102,7 +104,11 @@ for abi in arm64-v8a x86_64; do
   test -s "$JNI_DIR/$abi/libonnxruntime.so"
 done
 
+test -s "$CPP_DIR/onnxruntime_headers/onnxruntime_cxx_api.h"
+test -s "$CPP_DIR/onnxruntime_headers/onnxruntime_c_api.h"
+
 printf '\nVietnamese Kokoro assets prepared: %d voices.\n' "${#VOICES[@]}"
+printf 'ONNX Runtime     %s\n' "$ORT_VERSION"
 printf 'kokoro_vi.onnx  '; sha256sum "$MODEL"
 printf 'sea_g2p.bin     '; sha256sum "$DICTIONARY"
 for voice in "${VOICES[@]}"; do
