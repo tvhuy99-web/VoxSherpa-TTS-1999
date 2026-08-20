@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">VoxSherpa TTS</string>
+    <string name="app_name" translatable="false">VoxSherpa TTS 1999</string>
 
     <string-array name="language_list">
         <item>English</item>
