@@ -86,7 +86,24 @@ jobs:
         run: ./scripts/prepare_kokoro_vi_stage1.sh
 
       - name: Create selective dynamic INT8 model
-        run: python3 ./scripts/prepare_selective_int8_model.py
+        id: quantize
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci-state
+          python3 ./scripts/prepare_selective_int8_model.py 2>&1 | tee .ci-state/selective-int8-quantizer.log
+
+      - name: Record quantizer failure
+        if: failure() && steps.quantize.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tail -n 120 .ci-state/selective-int8-quantizer.log > .ci-state/selective-int8-quantizer-error.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/selective-int8-quantizer-error.txt
+          git commit -m "Record selective INT8 quantizer failure ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/selective-int8-experiment
 
       - name: Apply selective INT8 A-B-C experiment
         run: python3 ./scripts/apply_selective_int8_experiment.py
