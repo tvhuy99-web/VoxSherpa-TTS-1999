@@ -1,0 +1,97 @@
+name: Publish QNN HTP one-file prerelease
+
+on:
+  push:
+    branches: [agent/qnn-htp-experiment]
+    paths:
+      - .github/workflows/publish-qnn-htp-release.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_RUN_ID: '32355736528'
+      TAG: 'qnn-htp-test-4.1.4-20260820'
+      APK_NAME: 'VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk'
+      EXPECTED_SHA256: '5cd93820e368919c5f7e6f3655bd64e4bb615e0b7bd5dc82c156e2a6db1848e8'
+      EXPECTED_BYTES: '655709308'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download signed APK part 00
+        uses: actions/download-artifact@v4
+        with:
+          name: QNN-HTP-SIGNED-APK-part00
+          path: parts/00
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Download signed APK part 01
+        uses: actions/download-artifact@v4
+        with:
+          name: QNN-HTP-SIGNED-APK-part01
+          path: parts/01
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Download signed APK part 02
+        uses: actions/download-artifact@v4
+        with:
+          name: QNN-HTP-SIGNED-APK-part02
+          path: parts/02
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Download signed APK part 03
+        uses: actions/download-artifact@v4
+        with:
+          name: QNN-HTP-SIGNED-APK-part03
+          path: parts/03
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Reassemble and verify exact signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          P0=$(find parts/00 -name '*.part00' -type f | head -n 1)
+          P1=$(find parts/01 -name '*.part01' -type f | head -n 1)
+          P2=$(find parts/02 -name '*.part02' -type f | head -n 1)
+          P3=$(find parts/03 -name '*.part03' -type f | head -n 1)
+          test -n "$P0" && test -n "$P1" && test -n "$P2" && test -n "$P3"
+          cat "$P0" "$P1" "$P2" "$P3" > "release/$APK_NAME"
+          ACTUAL_BYTES=$(stat -c %s "release/$APK_NAME")
+          ACTUAL_SHA=$(sha256sum "release/$APK_NAME" | awk '{print $1}')
+          echo "bytes=$ACTUAL_BYTES"
+          echo "sha256=$ACTUAL_SHA"
+          test "$ACTUAL_BYTES" = "$EXPECTED_BYTES"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA256"
+
+      - name: Publish one-file GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "release/$APK_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "release/$APK_NAME#VoxSherpa 4.1.4 QNN HTP/NPU A-B signed APK" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title 'VoxSherpa 4.1.4 QNN HTP/NPU Test' \
+              --notes 'Experimental ARM64 APK for CPU FP32 vs strict QNN HTP/NPU testing. Signed installable test build. SHA-256: 5cd93820e368919c5f7e6f3655bd64e4bb615e0b7bd5dc82c156e2a6db1848e8.'
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,assets
