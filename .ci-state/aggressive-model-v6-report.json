@@ -1,0 +1,243 @@
+{
+  "status": "rejected_linear_candidate",
+  "runtime": "1.17.1",
+  "artifact": "kokoro_vi.onnx",
+  "originalBytes": 325731953,
+  "optimizedBytes": 316068678,
+  "sizeReductionPercent": 2.9666340409655767,
+  "requiredReductionPercent": 25.0,
+  "qualityGates": {
+    "durationExact": true,
+    "minCorrelation": 0.985,
+    "minSnrDb": 16.0,
+    "maxNormalizedRmse": 0.16
+  },
+  "strategy": "aggressive top-level dynamic INT8 linear: BERT/text/decoder allowed; predictor/duration/prosody/F0 scopes remain FP32; 12 deterministic duration/quality probes",
+  "rewrittenGemm": 58,
+  "rewritePrunedInitializers": 58,
+  "rewriteQuality": {
+    "durationExactAll": true,
+    "minCorrelation": 0.9999999999999999,
+    "minSnrDb": 226.72142750943433,
+    "maxNormalizedRmse": 0.0,
+    "cases": [
+      {
+        "tokens": 21,
+        "pattern": 0,
+        "durationExact": true,
+        "samples": 48600,
+        "correlation": 1.0,
+        "snrDb": 226.72142750943433,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 21,
+        "pattern": 1,
+        "durationExact": true,
+        "samples": 43800,
+        "correlation": 1.0,
+        "snrDb": 227.1817921467213,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 21,
+        "pattern": 2,
+        "durationExact": true,
+        "samples": 46800,
+        "correlation": 1.0,
+        "snrDb": 227.04720498624113,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 50,
+        "pattern": 0,
+        "durationExact": true,
+        "samples": 93600,
+        "correlation": 1.0,
+        "snrDb": 227.13533525913408,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 50,
+        "pattern": 1,
+        "durationExact": true,
+        "samples": 85800,
+        "correlation": 1.0,
+        "snrDb": 227.2897227073962,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 50,
+        "pattern": 2,
+        "durationExact": true,
+        "samples": 93000,
+        "correlation": 1.0,
+        "snrDb": 227.99864242081466,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 71,
+        "pattern": 0,
+        "durationExact": true,
+        "samples": 124200,
+        "correlation": 0.9999999999999999,
+        "snrDb": 227.45277217427696,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 71,
+        "pattern": 1,
+        "durationExact": true,
+        "samples": 112800,
+        "correlation": 1.0,
+        "snrDb": 227.5272518715408,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 71,
+        "pattern": 2,
+        "durationExact": true,
+        "samples": 124200,
+        "correlation": 0.9999999999999999,
+        "snrDb": 227.7774548546066,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 110,
+        "pattern": 0,
+        "durationExact": true,
+        "samples": 171600,
+        "correlation": 1.0,
+        "snrDb": 227.7884626614806,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 110,
+        "pattern": 1,
+        "durationExact": true,
+        "samples": 165600,
+        "correlation": 1.0,
+        "snrDb": 227.95216565518916,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 110,
+        "pattern": 2,
+        "durationExact": true,
+        "samples": 162600,
+        "correlation": 1.0,
+        "snrDb": 228.13577618907254,
+        "normalizedRmse": 0.0
+      }
+    ]
+  },
+  "targetMatMulCount": 66,
+  "convertedMatMulInteger": 66,
+  "targetWeightBytes": 43132928,
+  "quantizedWeightBytes": 43132928,
+  "targetScopes": {
+    "bert_text": 8,
+    "decoder": 58
+  },
+  "quantPrunedInitializers": 60,
+  "integerOps": {
+    "MatMulInteger": 66,
+    "DynamicQuantizeLinear": 7
+  },
+  "quality": {
+    "durationExactAll": false,
+    "minCorrelation": -1.0,
+    "minSnrDb": -999.0,
+    "maxNormalizedRmse": 999.0,
+    "cases": [
+      {
+        "tokens": 21,
+        "pattern": 0,
+        "durationExact": false,
+        "refSamples": 48600,
+        "candSamples": 47400
+      },
+      {
+        "tokens": 21,
+        "pattern": 1,
+        "durationExact": false,
+        "refSamples": 43800,
+        "candSamples": 43200
+      },
+      {
+        "tokens": 21,
+        "pattern": 2,
+        "durationExact": true,
+        "samples": 46800,
+        "correlation": 0.2706957525581398,
+        "snrDb": -1.0076642360454315,
+        "normalizedRmse": 1.1230089353835562
+      },
+      {
+        "tokens": 50,
+        "pattern": 0,
+        "durationExact": false,
+        "refSamples": 93600,
+        "candSamples": 93000
+      },
+      {
+        "tokens": 50,
+        "pattern": 1,
+        "durationExact": false,
+        "refSamples": 85800,
+        "candSamples": 87000
+      },
+      {
+        "tokens": 50,
+        "pattern": 2,
+        "durationExact": false,
+        "refSamples": 93000,
+        "candSamples": 91200
+      },
+      {
+        "tokens": 71,
+        "pattern": 0,
+        "durationExact": true,
+        "samples": 124200,
+        "correlation": 0.06880764044719546,
+        "snrDb": -1.9980603313910514,
+        "normalizedRmse": 1.2586443092737585
+      },
+      {
+        "tokens": 71,
+        "pattern": 1,
+        "durationExact": false,
+        "refSamples": 112800,
+        "candSamples": 114600
+      },
+      {
+        "tokens": 71,
+        "pattern": 2,
+        "durationExact": false,
+        "refSamples": 124200,
+        "candSamples": 125400
+      },
+      {
+        "tokens": 110,
+        "pattern": 0,
+        "durationExact": false,
+        "refSamples": 171600,
+        "candSamples": 170400
+      },
+      {
+        "tokens": 110,
+        "pattern": 1,
+        "durationExact": false,
+        "refSamples": 165600,
+        "candSamples": 166200
+      },
+      {
+        "tokens": 110,
+        "pattern": 2,
+        "durationExact": false,
+        "refSamples": 162600,
+        "candSamples": 163800
+      }
+    ]
+  }
+}
