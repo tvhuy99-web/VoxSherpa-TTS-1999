@@ -33,7 +33,9 @@ android {
     useLibrary 'org.apache.http.legacy'
 
     defaultConfig {
-        applicationId "com.CodeBySonu.VoxSherpa"
+        // Keep the original namespace for source compatibility, but use a unique
+        // applicationId so this fork installs as a completely separate Android app.
+        applicationId "com.tvhuy99.voxsherpa1999"
         namespace "com.CodeBySonu.VoxSherpa"
         minSdkVersion 30
         targetSdkVersion 36
