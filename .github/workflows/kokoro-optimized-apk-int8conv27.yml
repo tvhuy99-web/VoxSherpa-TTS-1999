@@ -8,7 +8,7 @@ on:
       - .github/workflows/kokoro-optimized-apk-int8conv27.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: kokoro-optimized-apk-int8conv27-${{ github.ref }}
@@ -25,6 +25,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record active run id
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/optimized-apk-int8conv27-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/optimized-apk-int8conv27-run.txt
+          git commit -m "Record optimized APK run ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/selective-int8-experiment
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
