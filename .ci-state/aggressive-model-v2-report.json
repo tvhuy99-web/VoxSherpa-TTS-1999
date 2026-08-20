@@ -1,0 +1,16 @@
+{
+  "status": "failed_before_report",
+  "logTail": [
+    "WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md ",
+    "Traceback (most recent call last):",
+    "  File \"/home/runner/work/VoxSherpa-TTS-1999/VoxSherpa-TTS-1999/scripts/prepare_aggressive_kokoro_model_v2.py\", line 361, in <module>",
+    "    onnx.checker.check_model(linear_model)",
+    "  File \"/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/onnx/checker.py\", line 148, in check_model",
+    "    C.check_model(protobuf_string, full_check, skip_opset_compatibility_check)",
+    "onnx.onnx_cpp2py_export.checker.ValidationError: Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: ",
+    "name: /SequenceAt OpType: SequenceAt",
+    " is not output of any previous nodes.",
+    "",
+    "==> Context: Bad node spec for node. Name: /Loop OpType: Loop"
+  ]
+}
