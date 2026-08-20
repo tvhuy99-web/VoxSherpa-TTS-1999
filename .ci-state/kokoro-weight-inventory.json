@@ -1,0 +1,2565 @@
+{
+  "modelBytes": 325731953,
+  "initializerCount": 532,
+  "initializerBytes": 324722984,
+  "topLevelConsumedInitializerBytes": 324722984,
+  "topLevelUnconsumedInitializerCount": 0,
+  "topLevelUnconsumedInitializerBytes": 0,
+  "bytesByConsumerOp": {
+    "ReduceL2": {
+      "uniqueInitializers": 89,
+      "bytes": 230545200
+    },
+    "Div": {
+      "uniqueInitializers": 89,
+      "bytes": 230545200
+    },
+    "LSTM": {
+      "uniqueInitializers": 18,
+      "bytes": 43089920
+    },
+    "Gemm": {
+      "uniqueInitializers": 146,
+      "bytes": 25636944
+    },
+    "MatMul": {
+      "uniqueInitializers": 10,
+      "bytes": 24088612
+    },
+    "Identity": {
+      "uniqueInitializers": 16,
+      "bytes": 22044176
+    },
+    "Gather": {
+      "uniqueInitializers": 4,
+      "bytes": 718848
+    },
+    "Conv": {
+      "uniqueInitializers": 87,
+      "bytes": 383560
+    },
+    "Mul": {
+      "uniqueInitializers": 137,
+      "bytes": 165480
+    },
+    "Reciprocal": {
+      "uniqueInitializers": 48,
+      "bytes": 36864
+    },
+    "Add": {
+      "uniqueInitializers": 10,
+      "bytes": 28876
+    },
+    "InstanceNormalization": {
+      "uniqueInitializers": 12,
+      "bytes": 28192
+    },
+    "LayerNormalization": {
+      "uniqueInitializers": 12,
+      "bytes": 25600
+    },
+    "ConvTranspose": {
+      "uniqueInitializers": 7,
+      "bytes": 11752
+    }
+  },
+  "bytesByConsumerScope": {
+    "decoder_generator": {
+      "uniqueInitializers": 387,
+      "bytes": 213130328
+    },
+    "bert_text": {
+      "uniqueInitializers": 59,
+      "bytes": 70462464
+    },
+    "other": {
+      "uniqueInitializers": 96,
+      "bytes": 63065624
+    },
+    "predictor_prosody": {
+      "uniqueInitializers": 2,
+      "bytes": 102600
+    }
+  },
+  "topInitializers": [
+    {
+      "name": "kmodel.decoder.decode.0.conv1.parametrizations.weight.original1",
+      "bytes": 13393920,
+      "dims": [
+        1024,
+        1090,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.0/conv1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.0/conv1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.1.conv1.parametrizations.weight.original1",
+      "bytes": 13393920,
+      "dims": [
+        1024,
+        1090,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.1/conv1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.1/conv1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.2.conv1.parametrizations.weight.original1",
+      "bytes": 13393920,
+      "dims": [
+        1024,
+        1090,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.2/conv1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.2/conv1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.encode.conv2.parametrizations.weight.original1",
+      "bytes": 12582912,
+      "dims": [
+        1024,
+        1024,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/encode/conv2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/encode/conv2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.0.conv2.parametrizations.weight.original1",
+      "bytes": 12582912,
+      "dims": [
+        1024,
+        1024,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.0/conv2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.0/conv2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.1.conv2.parametrizations.weight.original1",
+      "bytes": 12582912,
+      "dims": [
+        1024,
+        1024,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.1/conv2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.1/conv2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.2.conv2.parametrizations.weight.original1",
+      "bytes": 12582912,
+      "dims": [
+        1024,
+        1024,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.2/conv2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.2/conv2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.ups.0.parametrizations.weight.original1",
+      "bytes": 10485760,
+      "dims": [
+        512,
+        256,
+        20
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/ups.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/ups.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.3.conv1.parametrizations.weight.original1",
+      "bytes": 6696960,
+      "dims": [
+        512,
+        1090,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.3/conv1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.3/conv1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.encode.conv1.parametrizations.weight.original1",
+      "bytes": 6316032,
+      "dims": [
+        1024,
+        514,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/encode/conv1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/encode/conv1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7037",
+      "bytes": 6291456,
+      "dims": [
+        768,
+        2048
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1542",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1548",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1554",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1560",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1566",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1572",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1578",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1584",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7038",
+      "bytes": 6291456,
+      "dims": [
+        2048,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1541",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1547",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1553",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1559",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1565",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1571",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1577",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1583",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.text_encoder.cnn.0.0.parametrizations.weight.original1",
+      "bytes": 5242880,
+      "dims": [
+        512,
+        512,
+        5
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/text_encoder/cnn.0/cnn.0.0/weight/weight.0/ReduceL2",
+          "scope": "bert_text"
+        },
+        {
+          "op": "Div",
+          "name": "/text_encoder/cnn.0/cnn.0.0/weight/weight.0/Div",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.text_encoder.cnn.1.0.parametrizations.weight.original1",
+      "bytes": 5242880,
+      "dims": [
+        512,
+        512,
+        5
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/text_encoder/cnn.1/cnn.1.0/weight/weight.0/ReduceL2",
+          "scope": "bert_text"
+        },
+        {
+          "op": "Div",
+          "name": "/text_encoder/cnn.1/cnn.1.0/weight/weight.0/Div",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.text_encoder.cnn.2.0.parametrizations.weight.original1",
+      "bytes": 5242880,
+      "dims": [
+        512,
+        512,
+        5
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/text_encoder/cnn.2/cnn.2.0/weight/weight.0/ReduceL2",
+          "scope": "bert_text"
+        },
+        {
+          "op": "Div",
+          "name": "/text_encoder/cnn.2/cnn.2.0/weight/weight.0/Div",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7265",
+      "bytes": 5242880,
+      "dims": [
+        2,
+        1024,
+        640
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.0/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7321",
+      "bytes": 5242880,
+      "dims": [
+        2,
+        1024,
+        640
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.2/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7377",
+      "bytes": 5242880,
+      "dims": [
+        2,
+        1024,
+        640
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.4/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7432",
+      "bytes": 5242880,
+      "dims": [
+        2,
+        1024,
+        640
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/lstm/LSTM",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7481",
+      "bytes": 5242880,
+      "dims": [
+        2,
+        1024,
+        640
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/shared/LSTM",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.0.conv1x1.parametrizations.weight.original1",
+      "bytes": 4464640,
+      "dims": [
+        1024,
+        1090,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.0/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.0/conv1x1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.1.conv1x1.parametrizations.weight.original1",
+      "bytes": 4464640,
+      "dims": [
+        1024,
+        1090,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.1/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.1/conv1x1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.2.conv1x1.parametrizations.weight.original1",
+      "bytes": 4464640,
+      "dims": [
+        1024,
+        1090,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.2/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.2/conv1x1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7577",
+      "bytes": 4194304,
+      "dims": [
+        2,
+        1024,
+        512
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstm/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.0.conv1.parametrizations.weight.original1",
+      "bytes": 3145728,
+      "dims": [
+        512,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.0/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.0/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.0.conv2.parametrizations.weight.original1",
+      "bytes": 3145728,
+      "dims": [
+        512,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.0/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.0/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.0.conv1.parametrizations.weight.original1",
+      "bytes": 3145728,
+      "dims": [
+        512,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.0/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.0/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.0.conv2.parametrizations.weight.original1",
+      "bytes": 3145728,
+      "dims": [
+        512,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.0/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.0/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.3.conv2.parametrizations.weight.original1",
+      "bytes": 3145728,
+      "dims": [
+        512,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.3/conv2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.3/conv2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs1.0.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs1.1.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs1.2.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs2.0.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs2.1.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.2.convs2.2.parametrizations.weight.original1",
+      "bytes": 2883584,
+      "dims": [
+        256,
+        256,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.2/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.2/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7023",
+      "bytes": 2359296,
+      "dims": [
+        768,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1546",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1552",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1558",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1564",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1570",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1576",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1582",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1588",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7033",
+      "bytes": 2359296,
+      "dims": [
+        768,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1545",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1551",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1557",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1563",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1569",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1575",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1581",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1587",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7034",
+      "bytes": 2359296,
+      "dims": [
+        768,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1544",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1550",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1556",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1562",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1568",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1574",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1580",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1586",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7036",
+      "bytes": 2359296,
+      "dims": [
+        768,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "Identity",
+          "name": "Identity_1543",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1549",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1555",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1561",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1567",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1573",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1579",
+          "scope": "other"
+        },
+        {
+          "op": "Identity",
+          "name": "Identity_1585",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.3.conv1x1.parametrizations.weight.original1",
+      "bytes": 2232320,
+      "dims": [
+        512,
+        1090,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/decode.3/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/decode.3/conv1x1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.encode.conv1x1.parametrizations.weight.original1",
+      "bytes": 2105344,
+      "dims": [
+        1024,
+        514,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/encode/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/encode/conv1x1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7266",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.0/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7322",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.2/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7378",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstms.4/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7433",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/lstm/LSTM",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7482",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/shared/LSTM",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "onnx::LSTM_7578",
+      "bytes": 2097152,
+      "dims": [
+        2,
+        1024,
+        256
+      ],
+      "consumers": [
+        {
+          "op": "LSTM",
+          "name": "/text_encoder/lstm/LSTM",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs1.0.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs1.1.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs1.2.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs2.0.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs2.1.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.0.convs2.2.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.0/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.0/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs1.0.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs1.1.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs1.2.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs2.0.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs2.1.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.1.convs2.2.parametrizations.weight.original1",
+      "bytes": 1835008,
+      "dims": [
+        256,
+        256,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.1/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.1/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.1.conv1.parametrizations.weight.original1",
+      "bytes": 1572864,
+      "dims": [
+        256,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.1/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.1/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.1.conv1.parametrizations.weight.original1",
+      "bytes": 1572864,
+      "dims": [
+        256,
+        512,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.1/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.1/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.ups.1.parametrizations.weight.original1",
+      "bytes": 1572864,
+      "dims": [
+        256,
+        128,
+        12
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/ups.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/ups.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7215",
+      "bytes": 1572864,
+      "dims": [
+        768,
+        512
+      ],
+      "consumers": [
+        {
+          "op": "MatMul",
+          "name": "/bert_encoder/MatMul",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.0.norm1.fc.weight",
+      "bytes": 1116160,
+      "dims": [
+        2180,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.0/norm1/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.1.norm1.fc.weight",
+      "bytes": 1116160,
+      "dims": [
+        2180,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.1/norm1/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.2.norm1.fc.weight",
+      "bytes": 1116160,
+      "dims": [
+        2180,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.2/norm1/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.3.norm1.fc.weight",
+      "bytes": 1116160,
+      "dims": [
+        2180,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.3/norm1/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.encode.norm2.fc.weight",
+      "bytes": 1048576,
+      "dims": [
+        2048,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/encode/norm2/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.0.norm2.fc.weight",
+      "bytes": 1048576,
+      "dims": [
+        2048,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.0/norm2/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.1.norm2.fc.weight",
+      "bytes": 1048576,
+      "dims": [
+        2048,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.1/norm2/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.2.norm2.fc.weight",
+      "bytes": 1048576,
+      "dims": [
+        2048,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.2/norm2/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.1.conv2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.1/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.1/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.2.conv1.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.2/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.2/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.2.conv2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.2/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.2/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.1.conv2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.1/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.1/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.2.conv1.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.2/conv1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.2/conv1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.2.conv2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.2/conv2/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.2/conv2/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs1.0.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs1.1.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs1.2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs2.0.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs2.1.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.0.convs2.2.parametrizations.weight.original1",
+      "bytes": 786432,
+      "dims": [
+        256,
+        256,
+        3
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.0/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.0/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs1.0.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs1.1.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs1.2.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs2.0.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs2.1.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_res.1.convs2.2.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/noise_res.1/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/noise_res.1/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs1.0.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs1.1.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs1.2.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs2.0.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs2.1.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.5.convs2.2.parametrizations.weight.original1",
+      "bytes": 720896,
+      "dims": [
+        128,
+        128,
+        11
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.5/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.5/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.encode.norm1.fc.weight",
+      "bytes": 526336,
+      "dims": [
+        1028,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/encode/norm1/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.text_encoder.lstms.1.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/text_encoder/lstms.1/fc/Gemm",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.text_encoder.lstms.3.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/text_encoder/lstms.3/fc/Gemm",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.text_encoder.lstms.5.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/text_encoder/lstms.5/fc/Gemm",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.0.norm1.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/F0.0/norm1/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.0.norm2.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/F0.0/norm2/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.1.norm1.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/F0.1/norm1/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.1.conv1x1.parametrizations.weight.original1",
+      "bytes": 524288,
+      "dims": [
+        256,
+        512,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/F0.1/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/F0.1/conv1x1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.0.norm1.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/N.0/norm1/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.0.norm2.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/N.0/norm2/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.1.norm1.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/N.1/norm1/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.N.1.conv1x1.parametrizations.weight.original1",
+      "bytes": 524288,
+      "dims": [
+        256,
+        512,
+        1
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/N.1/conv1x1/weight/weight.0/ReduceL2",
+          "scope": "other"
+        },
+        {
+          "op": "Div",
+          "name": "/N.1/conv1x1/weight/weight.0/Div",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.decode.3.norm2.fc.weight",
+      "bytes": 524288,
+      "dims": [
+        1024,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/decoder/decode.3/norm2/fc/Gemm",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs1.0.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs1.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs1.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs1.1.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs1.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs1.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs1.2.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs1.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs1.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs2.0.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs2.0/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs2.0/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs2.1.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs2.1/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs2.1/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.resblocks.4.convs2.2.parametrizations.weight.original1",
+      "bytes": 458752,
+      "dims": [
+        128,
+        128,
+        7
+      ],
+      "consumers": [
+        {
+          "op": "ReduceL2",
+          "name": "/decoder/generator/resblocks.4/convs2.2/weight/weight.0/ReduceL2",
+          "scope": "decoder_generator"
+        },
+        {
+          "op": "Div",
+          "name": "/decoder/generator/resblocks.4/convs2.2/weight/weight.0/Div",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "onnx::MatMul_7022",
+      "bytes": 393216,
+      "dims": [
+        128,
+        768
+      ],
+      "consumers": [
+        {
+          "op": "MatMul",
+          "name": "/bert/encoder/embedding_hidden_mapping_in/MatMul",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.text_encoder.embedding.weight",
+      "bytes": 364544,
+      "dims": [
+        178,
+        512
+      ],
+      "consumers": [
+        {
+          "op": "Gather",
+          "name": "/text_encoder/embedding/Gather",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.decoder.generator.noise_convs.0.weight",
+      "bytes": 270336,
+      "dims": [
+        256,
+        22,
+        12
+      ],
+      "consumers": [
+        {
+          "op": "Conv",
+          "name": "/decoder/generator/noise_convs.0/Conv",
+          "scope": "decoder_generator"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.bert.embeddings.position_embeddings.weight",
+      "bytes": 262144,
+      "dims": [
+        512,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gather",
+          "name": "/bert/embeddings/position_embeddings/Gather",
+          "scope": "bert_text"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.1.norm2.fc.weight",
+      "bytes": 262144,
+      "dims": [
+        512,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/F0.1/norm2/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    },
+    {
+      "name": "kmodel.predictor.F0.2.norm1.fc.weight",
+      "bytes": 262144,
+      "dims": [
+        512,
+        128
+      ],
+      "consumers": [
+        {
+          "op": "Gemm",
+          "name": "/F0.2/norm1/fc/Gemm",
+          "scope": "other"
+        }
+      ]
+    }
+  ]
+}
