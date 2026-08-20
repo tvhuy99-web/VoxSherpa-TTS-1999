@@ -1,0 +1,104 @@
+name: Export QNN HTP APK in parts
+
+on:
+  push:
+    branches: [agent/qnn-htp-experiment]
+    paths:
+      - .github/workflows/export-qnn-htp-apk.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_RUN_ID: '32353974283'
+      SOURCE_ARTIFACT: 'VoxSherpa-Kokoro-ORT-1.26-QNN-HTP-AB'
+    steps:
+      - name: Download verified A/B artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          path: source
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Split exact APK into four parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find source -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          mkdir -p export
+          python - "$APK" <<'PY'
+          import hashlib, json, math, sys
+          from pathlib import Path
+          src = Path(sys.argv[1])
+          data_size = src.stat().st_size
+          parts = 4
+          chunk = math.ceil(data_size / parts)
+          sha = hashlib.sha256()
+          part_meta = []
+          with src.open('rb') as f:
+              for i in range(parts):
+                  payload = f.read(chunk)
+                  if not payload:
+                      raise SystemExit(f'missing payload for part {i}')
+                  sha.update(payload)
+                  p = Path('export') / f'VoxSherpa-4.1.4-QNN-HTP-AB.apk.part{i:02d}'
+                  p.write_bytes(payload)
+                  part_meta.append({
+                      'name': p.name,
+                      'bytes': len(payload),
+                      'sha256': hashlib.sha256(payload).hexdigest(),
+                  })
+              if f.read(1):
+                  raise SystemExit('split did not consume the full APK')
+          manifest = {
+              'sourceRunId': 32353974283,
+              'apkName': src.name,
+              'apkBytes': data_size,
+              'apkSha256': sha.hexdigest(),
+              'parts': part_meta,
+          }
+          Path('export/manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: QNN-HTP-APK-part00
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part00
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: QNN-HTP-APK-part01
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part01
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: QNN-HTP-APK-part02
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part02
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload part 03 and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: QNN-HTP-APK-part03
+          path: |
+            export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part03
+            export/manifest.json
+          compression-level: 0
+          retention-days: 7
