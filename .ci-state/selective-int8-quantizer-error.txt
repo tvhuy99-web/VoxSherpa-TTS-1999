@@ -1,2 +1,1 @@
-WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
-Waveform size mismatch: FP32=51600, INT8=43800
+Exact Gemm rewrite failed numeric equivalence: maxAbs=0.4718860983848572, rmse=0.026828454807400703
