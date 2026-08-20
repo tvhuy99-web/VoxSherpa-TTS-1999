@@ -42,6 +42,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- .ci-state/qnn-htp-run.txt
           git commit -m "Record QNN HTP build run $GITHUB_RUN_ID" || true
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Set up Java 17
@@ -82,7 +83,30 @@ jobs:
         run: bash scripts/prepare_kokoro_vi_qnn_htp.sh
 
       - name: Generate calibrated QNN QDQ model
-        run: python scripts/quantize_kokoro_vi_qnn_htp.py
+        id: quantize
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/qnn-htp-quant
+          python scripts/quantize_kokoro_vi_qnn_htp.py 2>&1 | tee build/qnn-htp-quant/quantize.log
+
+      - name: Record quantizer failure
+        if: failure() && steps.quantize.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "---- quantizer tail ----"
+            tail -n 160 build/qnn-htp-quant/quantize.log || true
+          } > .ci-state/qnn-htp-quant-error.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/qnn-htp-quant-error.txt
+          git commit -m "Record QNN HTP quantizer failure $GITHUB_RUN_ID" || true
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push origin HEAD:"$GITHUB_REF_NAME"
 
       - name: Verify QDQ quality gates
         shell: bash
