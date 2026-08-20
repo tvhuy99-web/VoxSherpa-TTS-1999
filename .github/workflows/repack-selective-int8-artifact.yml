@@ -1,0 +1,104 @@
+name: Repack Selective INT8 APK Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/int8-artifact-repack
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  repack:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record active repack run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nsource_run_id=32326835457\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/int8-artifact-repack-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/int8-artifact-repack-run.txt
+          git commit -m "Record active INT8 artifact repack ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/int8-artifact-repack
+
+      - name: Download successful selective INT8 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-Vietnamese-SELECTIVE-INT8-ABC
+          repository: tvhuy99-web/VoxSherpa-TTS-1999
+          run-id: 32326835457
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: source-artifact
+
+      - name: Split APK below connector limit
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find source-artifact -type f -name '*.apk' | head -n 1)
+          test -n "$APK"
+          mkdir -p chunks
+          cp "$APK" chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.full
+          sha256sum "$APK" | tee chunks/SHA256.txt
+          stat -c 'APK_BYTES=%s' "$APK" | tee chunks/SIZE.txt
+          split -b 300M -d -a 2 "$APK" chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-
+          ls -lh chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-*
+          test -f chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-00
+          test -f chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-01
+          test -f chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-02
+          rm chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.full
+
+      - name: Upload part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-int8-apk-part-00
+          path: chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-00
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload part 01
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-int8-apk-part-01
+          path: chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-01
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload part 02
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-int8-apk-part-02
+          path: chunks/VoxSherpa-TTS-Selective-INT8-ABC.apk.part-02
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload checksum metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-int8-apk-metadata
+          path: |
+            chunks/SHA256.txt
+            chunks/SIZE.txt
+          retention-days: 7
+
+      - name: Record successful repack run
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'run_id=%s\nsource_run_id=32326835457\nstatus=success\n' "$GITHUB_RUN_ID" > .ci-state/int8-artifact-repack-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/int8-artifact-repack-run.txt
+          git commit -m "Record successful INT8 artifact repack ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/int8-artifact-repack
