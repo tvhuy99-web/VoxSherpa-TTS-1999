@@ -15,9 +15,10 @@ def rewrite(path: str, old: str, new: str, count: int | None = None):
     p.write_text(s.replace(old, new), encoding="utf-8")
     print(f"patched {path}: {n} replacement(s)")
 
-# Native QNN provider: keep the already-proven QNN plumbing, but target HTP/NPU
-# and use latency-oriented provider options. CPU fallback stays enabled for the
-# first device experiment so unsupported control-flow nodes do not make the app unusable.
+
+# Native QNN provider: reuse the proven QNN plumbing, target Qualcomm HTP/NPU,
+# and force strict provider ownership so an "active HTP" result cannot silently
+# include ORT CPU fallback nodes.
 cpp = "app/src/main/cpp/kokoro_vi/kokoro_vi_jni.cpp"
 rewrite(
     cpp,
@@ -59,6 +60,45 @@ rewrite(
 ''',
     1,
 )
+rewrite(
+    cpp,
+    '''    if (use_qnn_gpu) append_qnn_gpu(options);
+    else if (use_nnapi) append_nnapi(options);
+''',
+    '''    if (use_qnn_gpu) {
+        // Strict experiment: if any node cannot be assigned to QNN HTP, session
+        // creation must fail instead of hiding CPU work inside an apparent HTP run.
+        options.AddConfigEntry("session.disable_cpu_ep_fallback", "1");
+        append_qnn_gpu(options);
+    } else if (use_nnapi) append_nnapi(options);
+''',
+    1,
+)
+rewrite(
+    cpp,
+    '''        if (requested_qnn_gpu) {
+            try {
+                g_session = create_session(path, cpu_threads, false, true);
+                g_active_qnn_gpu.store(true, std::memory_order_release);
+                LOGI("Vietnamese Kokoro loaded with QNN GPU + cpuThreads=%d", cpu_threads);
+            } catch (const std::exception& qnn_error) {
+                LOGW("QNN GPU session failed, falling back to CPU: %s", qnn_error.what());
+                g_session = create_session(path, cpu_threads, false, false);
+                LOGI("Vietnamese Kokoro CPU fallback after QNN GPU failure, cpuThreads=%d", cpu_threads);
+            }
+        } else if (requested_nnapi) {
+''',
+    '''        if (requested_qnn_gpu) {
+            // Do not CPU-fallback on the QDQ model here. Java owns the safe fallback
+            // and will rebuild the original FP32 model if strict HTP cannot start.
+            g_session = create_session(path, cpu_threads, false, true);
+            g_active_qnn_gpu.store(true, std::memory_order_release);
+            LOGI("Vietnamese Kokoro loaded with QNN HTP/NPU strict mode + cpuThreads=%d", cpu_threads);
+        } else if (requested_nnapi) {
+''',
+    1,
+)
+
 # User/debug-facing native text only. Internal JNI method names deliberately remain
 # qnnGpu to minimize experimental source churn.
 for old, new in [
@@ -80,7 +120,7 @@ s = s.replace("QNN GPU", "QNN HTP/NPU").replace("libQnnGpu", "libQnnHtp")
 p.write_text(s, encoding="utf-8")
 
 # Package and install a second model. CPU continues to use the untouched FP32 model;
-# HTP uses the calibrated QDQ model, making the A/B meaningful.
+# HTP uses the QNN U16/U8 QDQ model, making the A/B meaningful.
 asset = "app/src/main/java/com/CodeBySonu/VoxSherpa/vietnamese/VietnameseKokoroAssetStore.java"
 rewrite(asset,
         'import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;\n',
@@ -160,25 +200,63 @@ rewrite(engine,
 rewrite(engine,
         '"elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()\n',
         '"elapsedMs=" + elapsedMs(started) + ", modelBytes=" + (requestedQnnGpu ? assets.qnnModel.length() : assets.model.length())\n', 1)
+rewrite(engine,
+        '''        prepare(app);
+        if (!modelWarm && !warmCurrentSession(app, "runtime_backend_switch:" + requested)) {
+            throw new IllegalStateException("Vietnamese Kokoro runtime switch warm-up was interrupted.");
+        }
+
+        String active = activeProviderLabel();
+''',
+        '''        try {
+            prepare(app);
+            if (!modelWarm && !warmCurrentSession(app, "runtime_backend_switch:" + requested)) {
+                throw new IllegalStateException("Vietnamese Kokoro runtime switch warm-up was interrupted.");
+            }
+        } catch (Exception acceleratorError) {
+            if (!BACKEND_QNN_GPU.equals(requested)) throw acceleratorError;
+            TtsDiagnostics.warn(app, "provider", "qnn_htp_strict_failed",
+                    "Strict QNN HTP session/inference failed; restoring original CPU FP32 model. error=" + acceleratorError);
+            prefs.edit()
+                    .putString(PREF_RUNTIME_BACKEND, BACKEND_CPU)
+                    .putInt(PREF_CPU_THREADS, 0)
+                    .putBoolean(PREF_NNAPI_ENABLED, false)
+                    .apply();
+            try { nativeBridge.destroyEngine(); } catch (Throwable ignored) {}
+            modelReady = false;
+            modelWarm = false;
+            activeNnapi = false;
+            activeQnnGpu = false;
+            activeCpuThreads = 0;
+            prepare(app);
+            if (!modelWarm && !warmCurrentSession(app, "runtime_backend_strict_fallback_cpu_fp32")) {
+                throw new IllegalStateException("CPU FP32 fallback warm-up was interrupted.");
+            }
+        }
+
+        String active = activeProviderLabel();
+''', 1)
 p = ROOT / engine
 s = p.read_text(encoding="utf-8")
 s = s.replace('if (activeQnnGpu) return "QNN_GPU";', 'if (activeQnnGpu) return "QNN_HTP";')
 s = s.replace("QNN GPU runtime is not packaged", "QNN HTP/NPU runtime is not packaged")
 s = s.replace("QNN GPU experiment requested but libQnnGpu/libQnnSystem", "QNN HTP/NPU experiment requested but libQnnHtp/libQnnSystem")
 s = s.replace("QNN GPU session could not be created", "QNN HTP/NPU session could not be created")
+s = s.replace("native backend fell back to CPU", "strict HTP mode failed; Java will restore CPU FP32")
 p.write_text(s, encoding="utf-8")
 
 # Accessible diagnostics: preserve internal BACKEND_QNN_GPU preference value, but expose
-# the actual backend to the user as HTP/NPU and state that CPU uses FP32 while HTP uses QDQ.
+# the actual backend to the user as strict HTP/NPU and state that CPU uses FP32 while HTP uses QDQ.
 diag = "app/src/main/java/com/CodeBySonu/VoxSherpa/system/TtsDiagnosticsActivity.java"
 p = ROOT / diag
 s = p.read_text(encoding="utf-8")
 s = s.replace("same ORT 1.26.0, same model and voice",
-              "CPU FP32 vs Qualcomm HTP/NPU QDQ — same ORT 1.26.0 and voice")
+              "CPU FP32 vs Qualcomm HTP/NPU U16/U8 QDQ — same ORT 1.26.0 and voice")
 s = s.replace("QNN GPU", "QNN HTP/NPU")
 s = s.replace('if (gpu && !"QNN_GPU".equals(active))', 'if (gpu && !"QNN_HTP".equals(active))')
 s = s.replace("same Kokoro model for a fair comparison with QNN HTP/NPU",
-              "FP32 Kokoro model; HTP uses its calibrated QDQ counterpart")
+              "FP32 Kokoro model; HTP uses its U16/U8 QDQ counterpart in strict no-CPU-fallback mode")
+s = s.replace("SELECTED / FALLBACK CPU", "REQUEST FAILED / CPU FP32 RESTORED")
 p.write_text(s, encoding="utf-8")
 
-print("QNN HTP/NPU integration patch complete")
+print("QNN HTP/NPU strict integration patch complete")
