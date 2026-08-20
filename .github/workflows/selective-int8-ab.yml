@@ -93,7 +93,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p .ci-state
-          python3 ./scripts/prepare_selective_int8_model.py 2>&1 | tee .ci-state/selective-int8-quantizer.log
+          python3 ./scripts/run_selective_int8_model_quantizer.py 2>&1 | tee .ci-state/selective-int8-quantizer.log
 
       - name: Record quantizer failure
         if: failure() && steps.quantize.outcome == 'failure'
@@ -153,7 +153,7 @@ jobs:
       - name: Build selective INT8 APK
         env:
           VOX_VERSION_NAME: '4.1.6-selective-int8-abc'
-          VOX_VERSION_CODE: '200202'
+          VOX_VERSION_CODE: '200203'
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
