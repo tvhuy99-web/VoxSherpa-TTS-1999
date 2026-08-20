@@ -24,6 +24,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Record release publish run id
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=publishing-one-file-release\n' "$GITHUB_RUN_ID" > .ci-state/qnn-htp-release-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/qnn-htp-release-run.txt
+          git commit -m "Record QNN HTP release run $GITHUB_RUN_ID" || true
+          git pull --rebase origin "$GITHUB_REF_NAME" || true
+          git push origin HEAD:"$GITHUB_REF_NAME"
+
       - name: Download signed APK part 00
         uses: actions/download-artifact@v4
         with:
