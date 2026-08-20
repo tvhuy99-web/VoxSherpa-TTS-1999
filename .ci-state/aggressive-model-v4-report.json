@@ -1,0 +1,191 @@
+{
+  "status": "rejected_no_material_candidate",
+  "runtime": "1.17.1",
+  "originalBytes": 325731953,
+  "requiredReductionPercent": 25.0,
+  "qualityGates": {
+    "durationExact": true,
+    "minCorrelation": 0.985,
+    "minSnrDb": 16.0,
+    "maxNormalizedRmse": 0.16
+  },
+  "protection": {
+    "roundNodes": 1,
+    "protectedNodes": 2058,
+    "semanticExtra": 322
+  },
+  "rewrite": {
+    "convertedGemmToMatMul": 58,
+    "convertedMatMulNames": [
+      "/decoder/encode/norm1/fc/Gemm__v2_matmul",
+      "/decoder/encode/norm2/fc/Gemm__v2_matmul",
+      "/decoder/decode.0/norm1/fc/Gemm__v2_matmul",
+      "/decoder/decode.0/norm2/fc/Gemm__v2_matmul",
+      "/decoder/decode.1/norm1/fc/Gemm__v2_matmul",
+      "/decoder/decode.1/norm2/fc/Gemm__v2_matmul",
+      "/decoder/decode.2/norm1/fc/Gemm__v2_matmul",
+      "/decoder/decode.2/norm2/fc/Gemm__v2_matmul",
+      "/decoder/decode.3/norm1/fc/Gemm__v2_matmul",
+      "/decoder/decode.3/norm2/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.0/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.0/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.1/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.2/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/noise_res.1/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.3/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.4/adain2.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain1.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain2.0/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain1.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain2.1/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain1.2/fc/Gemm__v2_matmul",
+      "/decoder/generator/resblocks.5/adain2.2/fc/Gemm__v2_matmul"
+    ],
+    "skipped": [],
+    "prunedInitializers": 58
+  },
+  "rewriteQuality": {
+    "durationExactAll": true,
+    "minCorrelation": 1.0,
+    "minSnrDb": 226.72283627856763,
+    "maxNormalizedRmse": 0.0,
+    "cases": [
+      {
+        "tokens": 21,
+        "durationExact": true,
+        "samples": 48600,
+        "correlation": 1.0,
+        "snrDb": 226.72283627856763,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 50,
+        "durationExact": true,
+        "samples": 84600,
+        "correlation": 1.0,
+        "snrDb": 227.92945706784397,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 71,
+        "durationExact": true,
+        "samples": 126000,
+        "correlation": 1.0,
+        "snrDb": 227.8032596785323,
+        "normalizedRmse": 0.0
+      },
+      {
+        "tokens": 110,
+        "durationExact": true,
+        "samples": 171600,
+        "correlation": 1.0,
+        "snrDb": 227.78116988474392,
+        "normalizedRmse": 0.0
+      }
+    ]
+  },
+  "dynamicMatMul": {
+    "targets": 58,
+    "targetWeightBytes": 19146752,
+    "prunedInitializers": 58,
+    "bytes": 311999810,
+    "sizeReductionPercent": 4.215780144848114,
+    "quality": {
+      "durationExactAll": true,
+      "minCorrelation": 0.9998922939386553,
+      "minSnrDb": 37.03141617360014,
+      "maxNormalizedRmse": 0.014074377367678198,
+      "cases": [
+        {
+          "tokens": 21,
+          "durationExact": true,
+          "samples": 48600,
+          "correlation": 0.9998922939386553,
+          "snrDb": 37.03141617360014,
+          "normalizedRmse": 0.014074377367678198
+        },
+        {
+          "tokens": 50,
+          "durationExact": true,
+          "samples": 84600,
+          "correlation": 0.9999023884731413,
+          "snrDb": 37.24863878658446,
+          "normalizedRmse": 0.013726760637485397
+        },
+        {
+          "tokens": 71,
+          "durationExact": true,
+          "samples": 126000,
+          "correlation": 0.9999022440231107,
+          "snrDb": 37.42201205919955,
+          "normalizedRmse": 0.013455486258162891
+        },
+        {
+          "tokens": 110,
+          "durationExact": true,
+          "samples": 171600,
+          "correlation": 0.9999114634549359,
+          "snrDb": 37.77313683083216,
+          "normalizedRmse": 0.012922399357108054
+        }
+      ]
+    }
+  },
+  "convCandidates": [
+    {
+      "convMinimumWeightBytes": 262144,
+      "eligible": false,
+      "error": "ValidationError(\"Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \\nname: /SequenceAt OpType: SequenceAt\\n is not output of any previous nodes.\\n\\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop\")"
+    },
+    {
+      "convMinimumWeightBytes": 131072,
+      "eligible": false,
+      "error": "ValidationError(\"Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \\nname: /SequenceAt OpType: SequenceAt\\n is not output of any previous nodes.\\n\\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop\")"
+    },
+    {
+      "convMinimumWeightBytes": 65536,
+      "eligible": false,
+      "error": "ValidationError(\"Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \\nname: /SequenceAt OpType: SequenceAt\\n is not output of any previous nodes.\\n\\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop\")"
+    },
+    {
+      "convMinimumWeightBytes": 32768,
+      "eligible": false,
+      "error": "ValidationError(\"Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \\nname: /SequenceAt OpType: SequenceAt\\n is not output of any previous nodes.\\n\\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop\")"
+    }
+  ]
+}
