@@ -1,0 +1,39 @@
+name: Kokoro constant-fold weight test
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/selective-int8-experiment]
+    paths:
+      - scripts/test_ort_constant_fold_weights.py
+      - .github/workflows/kokoro-constant-fold-test.yml
+permissions:
+  contents: write
+jobs:
+  fold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Record active run
+        run: |
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/kokoro-constant-fold-run.txt
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/kokoro-constant-fold-run.txt; git commit -m "Record constant fold run ${GITHUB_RUN_ID}"; git push origin HEAD:agent/selective-int8-experiment
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install dependencies
+        run: python -m pip install 'numpy==1.26.4' 'onnx==1.15.0' 'onnxruntime==1.17.1'
+      - name: Download model
+        run: |
+          mkdir -p app/src/main/assets/kokoro_vi
+          curl --fail --location --retry 4 --retry-delay 3 -o app/src/main/assets/kokoro_vi/kokoro_vi.onnx 'https://huggingface.co/contextboxai/Kokoro-Vietnamese/resolve/9f210d622209fcc216fe2ac6159fed2ff381cb8a/kokoro_vi.onnx?download=true'
+      - name: Test constant folding
+        run: python scripts/test_ort_constant_fold_weights.py
+      - name: Save report
+        run: |
+          printf 'run_id=%s\nstatus=success\n' "$GITHUB_RUN_ID" > .ci-state/kokoro-constant-fold-run.txt
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/kokoro-constant-fold-report.json .ci-state/kokoro-constant-fold-run.txt
+          git commit -m "Record constant fold report ${GITHUB_RUN_ID}"; git push origin HEAD:agent/selective-int8-experiment
