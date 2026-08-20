@@ -9,7 +9,7 @@ on:
       - .github/workflows/kokoro-model-only-v10-release.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: kokoro-model-v10-release-${{ github.ref }}
@@ -21,6 +21,19 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Record active run id
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/model-v10-release-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/model-v10-release-run.txt
+          git commit -m "Record model v10 release run ${GITHUB_RUN_ID}"
+          git pull --rebase origin agent/selective-int8-experiment
+          git push origin HEAD:agent/selective-int8-experiment
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
       - name: Install dependencies
