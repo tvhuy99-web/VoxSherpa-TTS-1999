@@ -1,0 +1,66 @@
+name: Kokoro optimized model-only v10 release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/selective-int8-experiment]
+    paths:
+      - scripts/run_folded_qlinearconv_v10_release.py
+      - .github/workflows/kokoro-model-only-v10-release.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kokoro-model-v10-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  produce-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install dependencies
+        run: python -m pip install 'numpy==1.26.4' 'onnx==1.15.0' 'onnxruntime==1.17.1' && python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Download original model and one real voice
+        run: |
+          mkdir -p app/src/main/assets/kokoro_vi/voicepacks build/model-only-source
+          curl --fail --location --retry 4 --retry-delay 3 -o app/src/main/assets/kokoro_vi/kokoro_vi.onnx 'https://huggingface.co/contextboxai/Kokoro-Vietnamese/resolve/9f210d622209fcc216fe2ac6159fed2ff381cb8a/kokoro_vi.onnx?download=true'
+          curl --fail --location --retry 4 --retry-delay 3 -o build/model-only-source/diem_trinh.pt 'https://huggingface.co/contextboxai/Kokoro-Vietnamese/resolve/9f210d622209fcc216fe2ac6159fed2ff381cb8a/voicepacks/diem_trinh.pt?download=true'
+          python tools/kokoro_vi/convert_voicepack.py build/model-only-source/diem_trinh.pt app/src/main/assets/kokoro_vi/voicepacks/diem_trinh.f32le
+      - name: Reproduce accepted optimized model
+        run: python scripts/run_folded_qlinearconv_v10_release.py
+      - name: Verify release gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('build/model-only-output/optimization_report.json').read_text())
+          assert r['status']=='accepted_material_optimization', r['status']
+          assert r['sizeReductionPercent'] >= 25.0, r['sizeReductionPercent']
+          c=r['selectedCandidate']; q=c['quality']
+          assert c['selectedConvCount']==12, c['selectedConvCount']
+          assert q['durationExactAll'] is True
+          assert q['minCorrelation'] >= 0.985, q['minCorrelation']
+          assert q['minSnrDb'] >= 16.0, q['minSnrDb']
+          assert q['maxNormalizedRmse'] <= 0.16, q['maxNormalizedRmse']
+          print('optimizedBytes=',r['optimizedBytes'])
+          print('sizeReductionPercent=',r['sizeReductionPercent'])
+          print('sha256=',r['sha256'])
+          print('selectedConvCount=',c['selectedConvCount'])
+          print('selectedFp32ConvWeightBytes=',c['selectedFp32ConvWeightBytes'])
+          print('quality=',q)
+          PY
+      - name: Upload model only
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-Optimized-Model-Only-v10
+          path: |
+            build/model-only-output/kokoro_vi.onnx
+            build/model-only-output/optimization_report.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
