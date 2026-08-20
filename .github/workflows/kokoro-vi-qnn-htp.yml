@@ -108,7 +108,7 @@ jobs:
           git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push origin HEAD:"$GITHUB_REF_NAME"
 
-      - name: Verify QDQ quality gates
+      - name: Verify structural QDQ gate
         shell: bash
         run: |
           set -euo pipefail
@@ -119,13 +119,17 @@ jobs:
           p=Path('build/qnn-htp-quant/quant_report.json')
           r=json.loads(p.read_text())
           q=r['selected']
-          assert q['durationExactAll'] is True, q
-          assert q['minCorrelation'] >= 0.985, q
-          assert q['minSnrDb'] >= 16.0, q
-          assert q['maxNormalizedRmse'] <= 0.16, q
+          assert q['structuralValid'] is True, q
+          assert q['activationType'] == 'u16u8', q
+          assert q['weightType'] == 'u8', q
+          assert q['quantizeLinearNodes'] > 0, q
+          assert q['dequantizeLinearNodes'] > 0, q
+          assert q['deviceQualityRequired'] is True, q
+          assert r['qualityGate'] == 'target_device_qnn_htp', r
           print('selectedActivation=',q['activationType'])
+          print('Q=',q['quantizeLinearNodes'],'DQ=',q['dequantizeLinearNodes'])
           print('qdqBytes=',r['selectedBytes'])
-          print('quality=',json.dumps(q,ensure_ascii=False))
+          print('structural=',json.dumps(q,ensure_ascii=False))
           PY
 
       - name: Apply HTP Android integration
