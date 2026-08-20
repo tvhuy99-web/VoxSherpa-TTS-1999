@@ -1,0 +1,15 @@
+{
+  "status": "failed_before_report",
+  "logTail": [
+    "Traceback (most recent call last):",
+    "  File \"/home/runner/work/VoxSherpa-TTS-1999/VoxSherpa-TTS-1999/scripts/prepare_folded_qlinearconv_v8.py\", line 193, in <module>",
+    "    ranges=calibration_ranges(FOLDED,names)",
+    "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "  File \"/home/runner/work/VoxSherpa-TTS-1999/VoxSherpa-TTS-1999/scripts/prepare_folded_qlinearconv_v8.py\", line 131, in calibration_ranges",
+    "    inst=WORK/'calibration_instrumented.onnx'; onnx.save(m,str(inst)); onnx.checker.check_model(m)",
+    "                                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+    "  File \"/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages/onnx/checker.py\", line 148, in check_model",
+    "    C.check_model(protobuf_string, full_check, skip_opset_compatibility_check)",
+    "onnx.onnx_cpp2py_export.checker.ValidationError: Field 'shape' of 'type' is required but missing."
+  ]
+}
