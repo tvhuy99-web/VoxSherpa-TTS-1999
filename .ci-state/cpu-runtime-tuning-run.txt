@@ -1,4 +1,4 @@
-run_id=32320571981
-head_sha=798d28d7d243012b4048b342dae070477f77fc83
+run_id=32320703620
+head_sha=f99544d46596670430a986198c1db7cc4376ebe6
 status=running
 artifact=VoxSherpa-Kokoro-Vietnamese-ORT-1.17.1-CPU-RUNTIME-TUNING
