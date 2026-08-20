@@ -1,0 +1,121 @@
+name: Kokoro model-only aggressive optimization v3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/selective-int8-experiment
+    paths:
+      - scripts/run_aggressive_kokoro_v3.py
+      - scripts/prepare_aggressive_kokoro_model_v2.py
+      - .github/workflows/kokoro-model-only-optimize-v3.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kokoro-model-only-v3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  optimize-model:
+    name: Produce corrected optimized kokoro_vi.onnx only
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record active run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nhead_sha=%s\nstatus=running\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" > .ci-state/aggressive-model-v3-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/aggressive-model-v3-run.txt
+          git commit -m "Record active aggressive model v3 run ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/selective-int8-experiment
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy==1.26.4' 'onnx==1.15.0' 'onnxruntime==1.17.1'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Download original model and real voice
+        shell: bash
+        run: |
+          set -euo pipefail
+          HF_REPO='contextboxai/Kokoro-Vietnamese'
+          HF_REVISION='9f210d622209fcc216fe2ac6159fed2ff381cb8a'
+          A='app/src/main/assets/kokoro_vi'
+          mkdir -p "$A/voicepacks" build/model-only-source
+          curl --fail --location --retry 4 --retry-delay 3 -o "$A/kokoro_vi.onnx" "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/kokoro_vi.onnx?download=true"
+          curl --fail --location --retry 4 --retry-delay 3 -o build/model-only-source/diem_trinh.pt "https://huggingface.co/${HF_REPO}/resolve/${HF_REVISION}/voicepacks/diem_trinh.pt?download=true"
+          python tools/kokoro_vi/convert_voicepack.py build/model-only-source/diem_trinh.pt "$A/voicepacks/diem_trinh.f32le"
+          test "$(wc -c < "$A/kokoro_vi.onnx")" -gt 300000000
+          test "$(wc -c < "$A/voicepacks/diem_trinh.f32le")" -eq 522240
+
+      - name: Optimize model with corrected ORT pass
+        id: optimize
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci-state
+          python scripts/run_aggressive_kokoro_v3.py 2>&1 | tee .ci-state/aggressive-model-v3.log
+
+      - name: Record result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s build/model-only-output/optimization_report.json ]]; then
+            cp build/model-only-output/optimization_report.json .ci-state/aggressive-model-v3-report.json
+          else
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('.ci-state/aggressive-model-v3.log')
+          tail=p.read_text(errors='replace').splitlines()[-220:] if p.exists() else ['no optimizer log']
+          Path('.ci-state/aggressive-model-v3-report.json').write_text(json.dumps({'status':'failed_before_report','logTail':tail},ensure_ascii=False,indent=2)+'\n')
+          PY
+          fi
+          printf 'run_id=%s\nhead_sha=%s\nstatus=%s\n' "$GITHUB_RUN_ID" "$GITHUB_SHA" "${{ steps.optimize.outcome }}" > .ci-state/aggressive-model-v3-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/aggressive-model-v3-report.json .ci-state/aggressive-model-v3-run.txt
+          git commit -m "Record aggressive model v3 result ${GITHUB_RUN_ID}"
+          git push origin HEAD:agent/selective-int8-experiment
+
+      - name: Verify accepted model
+        if: steps.optimize.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('build/model-only-output/optimization_report.json').read_text())
+          assert r['status']=='accepted_material_optimization'
+          assert r['sizeReductionPercent'] >= 25.0
+          print('reduction=',r['sizeReductionPercent'])
+          print('bytes=',r['optimizedBytes'])
+          print('sha256=',r['sha256'])
+          PY
+
+      - name: Upload model file
+        if: steps.optimize.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-Optimized-Model-Only-v3
+          path: |
+            build/model-only-output/kokoro_vi.onnx
+            build/model-only-output/optimization_report.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
