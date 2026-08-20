@@ -1,0 +1,152 @@
+name: Kokoro Vietnamese CPU vs QNN HTP/NPU A/B
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/qnn-htp-experiment]
+    paths:
+      - scripts/prepare_kokoro_vi_qnn_htp.sh
+      - scripts/quantize_kokoro_vi_qnn_htp.py
+      - scripts/apply_qnn_htp_experiment.py
+      - .github/workflows/kokoro-vi-qnn-htp.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kokoro-vi-qnn-htp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-qnn-htp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      ORT_QNN_VERSION: '1.26.0'
+      QNN_RUNTIME_VERSION: '2.42.0'
+      VOX_VERSION_NAME: '4.1.4-qnn-htp-ab'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record active run id
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/qnn-htp-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/qnn-htp-run.txt
+          git commit -m "Record QNN HTP build run $GITHUB_RUN_ID" || true
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy==1.26.4' 'onnx==1.17.0' 'onnxruntime==1.26.0'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust Android targets and cargo-ndk
+        run: |
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Prepare Kokoro and QNN HTP runtime
+        run: bash scripts/prepare_kokoro_vi_qnn_htp.sh
+
+      - name: Generate calibrated QNN QDQ model
+        run: python scripts/quantize_kokoro_vi_qnn_htp.py
+
+      - name: Verify QDQ quality gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/src/main/assets/kokoro_vi/kokoro_vi_qdq.onnx
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('build/qnn-htp-quant/quant_report.json')
+          r=json.loads(p.read_text())
+          q=r['selected']
+          assert q['durationExactAll'] is True, q
+          assert q['minCorrelation'] >= 0.985, q
+          assert q['minSnrDb'] >= 16.0, q
+          assert q['maxNormalizedRmse'] <= 0.16, q
+          print('selectedActivation=',q['activationType'])
+          print('qdqBytes=',r['selectedBytes'])
+          print('quality=',json.dumps(q,ensure_ascii=False))
+          PY
+
+      - name: Apply HTP Android integration
+        run: python scripts/apply_qnn_htp_experiment.py
+
+      - name: Build ARM64 CPU-vs-HTP A/B APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean assembleRelease \
+            -PkokoroViStage1=true \
+            -PkokoroViQnnGpu=true \
+            --no-daemon -x test -x lint
+
+      - name: Verify HTP APK payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/kokoro_vi.onnx'
+          unzip -l "$APK" | grep -F 'assets/kokoro_vi/kokoro_vi_qdq.onnx'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libonnxruntime.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libQnnHtp.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libQnnSystem.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libsea_g2p_android.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so'
+          if unzip -l "$APK" | grep -F 'lib/x86_64/'; then
+            echo 'ERROR: HTP experiment APK unexpectedly contains x86_64 libraries' >&2
+            exit 1
+          fi
+          voices=(diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy)
+          for voice in "${voices[@]}"; do
+            unzip -l "$APK" | grep -F "assets/kokoro_vi/voicepacks/${voice}.f32le"
+          done
+          test "$(unzip -l "$APK" | grep -c 'assets/kokoro_vi/voicepacks/.*\.f32le')" -eq 14
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload CPU-vs-QNN-HTP APK and quantization report
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-ORT-1.26-QNN-HTP-AB
+          path: |
+            app/build/outputs/apk/release/*.apk
+            build/qnn-htp-quant/quant_report.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
