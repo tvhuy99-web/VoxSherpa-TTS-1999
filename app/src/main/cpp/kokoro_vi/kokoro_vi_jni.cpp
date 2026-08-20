@@ -39,8 +39,10 @@ std::mutex g_run_options_mutex;
 Ort::RunOptions* g_active_run_options = nullptr;
 std::atomic<bool> g_cancel_requested{false};
 std::atomic<bool> g_active_nnapi{false};
-std::array<int64_t, 6> g_last_timing_us{0,0,0,0,0,0};
+std::atomic<bool> g_active_xnnpack{false};
+std::array<int64_t, 7> g_last_timing_us{0,0,0,0,0,0,0};
 int g_active_threads = 0;
+int g_active_xnnpack_threads = 0;
 
 int64_t us_since(const Clock::time_point& start) {
     return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
@@ -96,15 +98,40 @@ void append_nnapi(Ort::SessionOptions& options) {
     }
 }
 
-std::unique_ptr<Ort::Session> create_session(const std::string& path, int cpu_threads, bool use_nnapi) {
+void append_xnnpack(Ort::SessionOptions& options, int xnnpack_threads) {
+    const std::string thread_count = std::to_string(std::max(1, xnnpack_threads));
+    const char* keys[] = {"intra_op_num_threads"};
+    const char* values[] = {thread_count.c_str()};
+    const OrtApi& api = Ort::GetApi();
+    OrtStatus* status = api.SessionOptionsAppendExecutionProvider(
+            options, "XNNPACK", keys, values, 1);
+    if (status != nullptr) {
+        const char* raw = api.GetErrorMessage(status);
+        std::string message = raw == nullptr ? "unknown XNNPACK provider error" : raw;
+        api.ReleaseStatus(status);
+        throw std::runtime_error("Cannot enable XNNPACK: " + message);
+    }
+}
+
+std::unique_ptr<Ort::Session> create_session(
+        const std::string& path, int cpu_threads, bool use_nnapi, bool use_xnnpack) {
     Ort::SessionOptions options;
-    // cpu_threads == 0 intentionally leaves ORT in its default intra-op mode. With
-    // sequential execution this also lets ORT choose its normal worker affinity.
-    if (cpu_threads > 0) options.SetIntraOpNumThreads(cpu_threads);
+    int xnnpack_threads = 0;
+    if (use_xnnpack) {
+        const unsigned int detected = std::thread::hardware_concurrency();
+        xnnpack_threads = std::max(1, std::min(8, static_cast<int>(detected == 0 ? 4u : detected)));
+        // XNNPACK owns a separate intra-op pool. ORT recommends a single ORT intra-op
+        // thread plus disabled spinning to avoid thread-pool contention.
+        options.SetIntraOpNumThreads(1);
+        options.AddConfigEntry("session.intra_op.allow_spinning", "0");
+    } else if (cpu_threads > 0) {
+        options.SetIntraOpNumThreads(cpu_threads);
+    }
     options.SetInterOpNumThreads(1);
     options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
     options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    if (use_nnapi) append_nnapi(options);
+    if (use_xnnpack) append_xnnpack(options, xnnpack_threads);
+    else if (use_nnapi) append_nnapi(options);
     return std::make_unique<Ort::Session>(g_env, path.c_str(), options);
 }
 
@@ -230,37 +257,60 @@ extern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vietn
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_createEngine(
-        JNIEnv* env, jobject, jstring model_path, jint cpu_threads, jboolean use_nnapi) {
+        JNIEnv* env, jobject, jstring model_path, jint cpu_threads, jboolean use_nnapi, jboolean use_xnnpack) {
     const auto path = jstring_to_utf8(env, model_path);
-    const bool requested_nnapi = use_nnapi == JNI_TRUE;
+    const bool requested_xnnpack = use_xnnpack == JNI_TRUE;
+    const bool requested_nnapi = !requested_xnnpack && use_nnapi == JNI_TRUE;
     terminate_active_run();
     try {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_session.reset();
-        if (requested_nnapi) {
+        g_active_nnapi.store(false, std::memory_order_release);
+        g_active_xnnpack.store(false, std::memory_order_release);
+        g_active_xnnpack_threads = 0;
+        if (requested_xnnpack) {
             try {
-                g_session = create_session(path, cpu_threads, true);
+                const unsigned int detected = std::thread::hardware_concurrency();
+                const int xnn_threads = std::max(1, std::min(8, static_cast<int>(detected == 0 ? 4u : detected)));
+                g_session = create_session(path, 1, false, true);
+                g_active_xnnpack.store(true, std::memory_order_release);
+                g_active_threads = 1;
+                g_active_xnnpack_threads = xnn_threads;
+                LOGI("Vietnamese Kokoro loaded with XNNPACK, ORT intra-op=1, xnnpackThreads=%d", xnn_threads);
+            } catch (const std::exception& xnn_error) {
+                LOGW("XNNPACK session failed, falling back to CPU: %s", xnn_error.what());
+                g_session = create_session(path, cpu_threads, false, false);
+                g_active_threads = cpu_threads;
+                LOGI("Vietnamese Kokoro CPU fallback after XNNPACK failure, cpuThreads=%d", cpu_threads);
+            }
+        } else if (requested_nnapi) {
+            try {
+                g_session = create_session(path, cpu_threads, true, false);
                 g_active_nnapi.store(true, std::memory_order_release);
+                g_active_threads = cpu_threads;
                 LOGI("Vietnamese Kokoro loaded with NNAPI + cpuThreads=%d", cpu_threads);
             } catch (const std::exception& nnapi_error) {
                 LOGW("NNAPI session failed, falling back to CPU: %s", nnapi_error.what());
-                g_session = create_session(path, cpu_threads, false);
-                g_active_nnapi.store(false, std::memory_order_release);
+                g_session = create_session(path, cpu_threads, false, false);
+                g_active_threads = cpu_threads;
                 LOGI("Vietnamese Kokoro CPU fallback loaded with cpuThreads=%d", cpu_threads);
             }
         } else {
-            g_session = create_session(path, cpu_threads, false);
-            g_active_nnapi.store(false, std::memory_order_release);
+            g_session = create_session(path, cpu_threads, false, false);
+            g_active_threads = cpu_threads;
             LOGI("Vietnamese Kokoro loaded with CPU cpuThreads=%d (0=ORT default + auto affinity)", cpu_threads);
         }
-        g_active_threads = cpu_threads;
         return JNI_TRUE;
     } catch (const Ort::Exception& e) {
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_xnnpack.store(false, std::memory_order_release);
+        g_active_xnnpack_threads = 0;
         LOGE("ONNX load error: %s", e.what());
         throw_runtime(env, std::string("Vietnamese Kokoro model load failed: ") + e.what());
     } catch (const std::exception& e) {
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_xnnpack.store(false, std::memory_order_release);
+        g_active_xnnpack_threads = 0;
         throw_runtime(env, std::string("Vietnamese Kokoro native load failed: ") + e.what());
     }
     return JNI_FALSE;
@@ -271,6 +321,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vietn
     std::lock_guard<std::mutex> lock(g_mutex);
     g_session.reset();
     g_active_nnapi.store(false, std::memory_order_release);
+    g_active_xnnpack.store(false, std::memory_order_release);
+    g_active_xnnpack_threads = 0;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_cancelActiveRun(JNIEnv*, jobject) {
@@ -281,6 +333,10 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_V
 
 extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isNnapiActive(JNIEnv*, jobject) {
     return g_active_nnapi.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_isXnnpackActive(JNIEnv*, jobject) {
+    return g_active_xnnpack.load(std::memory_order_acquire) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_VietnameseKokoroNative_synthesize(JNIEnv* env, jobject, jlongArray input_ids, jfloatArray ref_style, jfloat speed) {
@@ -328,7 +384,7 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnames
         } catch (const Ort::Exception& e) {
             const int64_t cancelled_run_us = us_since(ort_start);
             if (g_cancel_requested.load(std::memory_order_acquire)) {
-                g_last_timing_us = {lock_wait_us, input_prep_us, cancelled_run_us, 0, us_since(total_start), g_active_threads};
+                g_last_timing_us = {lock_wait_us, input_prep_us, cancelled_run_us, 0, us_since(total_start), g_active_threads, g_active_xnnpack_threads};
                 LOGI("ONNX synthesis terminated after %lld us", static_cast<long long>(cancelled_run_us));
                 return nullptr;
             }
@@ -344,7 +400,7 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnames
         if (result == nullptr) return nullptr;
         env->SetFloatArrayRegion(result, 0, static_cast<jsize>(sample_count), audio);
         const int64_t output_copy_us = us_since(copy_start);
-        g_last_timing_us = {lock_wait_us, input_prep_us, ort_run_us, output_copy_us, us_since(total_start), g_active_threads};
+        g_last_timing_us = {lock_wait_us, input_prep_us, ort_run_us, output_copy_us, us_since(total_start), g_active_threads, g_active_xnnpack_threads};
         return result;
     } catch (const Ort::Exception& e) {
         LOGE("ONNX synthesis error: %s", e.what());
@@ -359,7 +415,7 @@ extern "C" JNIEXPORT jlongArray JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese
     std::lock_guard<std::mutex> lock(g_mutex);
     jlongArray out = env->NewLongArray(static_cast<jsize>(g_last_timing_us.size()));
     if (!out) return nullptr;
-    std::array<jlong,6> values{};
+    std::array<jlong,7> values{};
     for (size_t i = 0; i < values.size(); ++i) values[i] = static_cast<jlong>(g_last_timing_us[i]);
     env->SetLongArrayRegion(out, 0, static_cast<jsize>(values.size()), values.data());
     return out;
@@ -409,11 +465,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
 
         g_session.reset();
         g_active_nnapi.store(false, std::memory_order_release);
+        g_active_xnnpack.store(false, std::memory_order_release);
+        g_active_xnnpack_threads = 0;
         for (int candidate : candidates) {
             CandidateBenchmark result;
             result.threads = candidate;
             auto load_start = Clock::now();
-            auto session = create_session(path, candidate, false);
+            auto session = create_session(path, candidate, false, false);
             result.load_ms = us_since(load_start) / 1000;
 
             for (size_t workload = 0; workload < workloads.size(); ++workload) {
@@ -449,7 +507,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_CodeBySonu_VoxSherpa_vietnamese_Vi
             }
         }
 
-        g_session = create_session(path, best_threads, false);
+        g_session = create_session(path, best_threads, false, false);
         g_active_threads = best_threads;
         g_active_nnapi.store(false, std::memory_order_release);
 

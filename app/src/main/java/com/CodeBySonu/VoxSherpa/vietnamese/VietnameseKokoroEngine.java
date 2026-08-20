@@ -3,6 +3,7 @@ package com.CodeBySonu.VoxSherpa.vietnamese;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.CodeBySonu.VoxSherpa.BuildConfig;
 import com.CodeBySonu.VoxSherpa.Sonic;
 import com.CodeBySonu.VoxSherpa.system.TtsDiagnostics;
 
@@ -36,6 +37,9 @@ public final class VietnameseKokoroEngine {
     private static final String APP_PREFS = "sp3";
     private static final String PREF_CPU_THREADS = "cpu_threads";
     private static final String PREF_NNAPI_ENABLED = "nnapi_enabled";
+    private static final String PREF_RUNTIME_BACKEND = "runtime_backend";
+    public static final String BACKEND_CPU = "CPU";
+    public static final String BACKEND_XNNPACK = "XNNPACK";
     private static final String WARMUP_TEXT = "Giọng nói chính.";
     private static final Pattern SENTENCE_BOUNDARY = Pattern.compile("[.!?…]+(?:[\\\"”’)]*)");
     private static final Pattern EFFECT_TOKEN = Pattern.compile("(\\[[a-zA-Z]+\\]|\\.\\.\\.|[.,!?।])");
@@ -60,6 +64,7 @@ public final class VietnameseKokoroEngine {
     private volatile boolean modelReady;
     private volatile boolean modelWarm;
     private volatile boolean activeNnapi;
+    private volatile boolean activeXnnpack;
     private volatile int activeCpuThreads = 0;
     private Map<Character, Long> vocab = new HashMap<>();
     private final LinkedHashMap<String, float[]> voiceStyleCache =
@@ -133,13 +138,81 @@ public final class VietnameseKokoroEngine {
         return activeNnapi;
     }
 
+    public boolean isXnnpackActive() {
+        return activeXnnpack;
+    }
+
+    public boolean isXnnpackAbBuild() {
+        return BuildConfig.KOKORO_XNNPACK_AB;
+    }
+
+    public String requestedRuntimeBackend(Context context) {
+        if (!BuildConfig.KOKORO_XNNPACK_AB || context == null) return BACKEND_CPU;
+        String saved = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE)
+                .getString(PREF_RUNTIME_BACKEND, BACKEND_CPU);
+        return BACKEND_XNNPACK.equals(saved) ? BACKEND_XNNPACK : BACKEND_CPU;
+    }
+
+    public boolean isXnnpackRequested(Context context) {
+        return BuildConfig.KOKORO_XNNPACK_AB
+                && BACKEND_XNNPACK.equals(requestedRuntimeBackend(context));
+    }
+
+    private String activeProviderLabel() {
+        if (activeXnnpack) return BACKEND_XNNPACK;
+        if (activeNnapi) return "NNAPI";
+        return BACKEND_CPU;
+    }
+
+    public synchronized String setRuntimeBackend(Context context, String backend) throws Exception {
+        if (context == null) throw new IllegalArgumentException("Context is required.");
+        Context app = context.getApplicationContext();
+        appContext = app;
+        String requested = BACKEND_XNNPACK.equals(backend) ? BACKEND_XNNPACK : BACKEND_CPU;
+        if (BACKEND_XNNPACK.equals(requested) && !BuildConfig.KOKORO_XNNPACK_AB) {
+            throw new IllegalStateException("XNNPACK runtime is not packaged in this build.");
+        }
+
+        SharedPreferences prefs = app.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
+        prefs.edit()
+                .putString(PREF_RUNTIME_BACKEND, requested)
+                .putInt(PREF_CPU_THREADS, 0)
+                .putBoolean(PREF_NNAPI_ENABLED, false)
+                .apply();
+
+        long started = System.nanoTime();
+        TtsDiagnostics.info(app, "provider", "backend_switch_start",
+                "requestedBackend=" + requested + ", CPU mode uses ORT default; XNNPACK uses its dedicated threadpool");
+        cancel();
+        if (modelReady) nativeBridge.destroyEngine();
+        modelReady = false;
+        modelWarm = false;
+        activeNnapi = false;
+        activeXnnpack = false;
+        activeCpuThreads = 0;
+
+        prepare(app);
+        if (!modelWarm && !warmCurrentSession(app, "runtime_backend_switch:" + requested)) {
+            throw new IllegalStateException("Vietnamese Kokoro runtime switch warm-up was interrupted.");
+        }
+
+        String active = activeProviderLabel();
+        TtsDiagnostics.info(app, "provider", "backend_switch_complete",
+                "requestedBackend=" + requested + ", activeProvider=" + active
+                        + ", elapsedMs=" + elapsedMs(started) + ", " + performanceState(app));
+        return active;
+    }
+
     public String performanceState(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
         int saved = prefs.getInt(PREF_CPU_THREADS, 0);
         boolean nnapiRequested = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
         synchronized (this) {
             return "ready=" + isReady() + ", modelReady=" + modelReady + ", warm=" + modelWarm
-                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")
+                    + ", g2pReady=" + (g2pHandle != 0L) + ", provider=" + activeProviderLabel()
+                    + ", requestedBackend=" + requestedRuntimeBackend(context)
+                    + ", xnnpackBuild=" + BuildConfig.KOKORO_XNNPACK_AB
+                    + ", xnnpackRequested=" + isXnnpackRequested(context)
                     + ", nnapiRequested=" + nnapiRequested + ", activeCpuThreads=" + activeCpuThreads
                     + ", savedCpuThreads=" + saved + " (0=ORT default/auto-affinity)"
                     + ", cachedVoiceStyles=" + voiceStyleCache.size();
@@ -222,6 +295,7 @@ public final class VietnameseKokoroEngine {
         modelReady = false;
         modelWarm = false;
         activeNnapi = false;
+        activeXnnpack = false;
 
         prepare(app);
         if (!modelWarm && !warmCurrentSession(app, "provider_switch")) {
@@ -506,6 +580,7 @@ public final class VietnameseKokoroEngine {
         modelReady = false;
         modelWarm = false;
         activeNnapi = false;
+        activeXnnpack = false;
         assets = null;
         vocab.clear();
         voiceStyleCache.clear();
@@ -532,6 +607,7 @@ public final class VietnameseKokoroEngine {
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
+        activeXnnpack = false;
             throw e;
         }
         JSONObject result = new JSONObject(json);
@@ -541,12 +617,14 @@ public final class VietnameseKokoroEngine {
         modelReady = true;
         modelWarm = false;
         activeNnapi = false;
+        activeXnnpack = false;
 
         if (restoreNnapi) {
             nativeBridge.destroyEngine();
             modelReady = false;
             modelWarm = false;
             activeNnapi = false;
+        activeXnnpack = false;
             prepare(app);
             if (!modelWarm && !warmCurrentSession(app, "benchmark_restore_nnapi")) {
                 throw new IllegalStateException("Vietnamese Kokoro benchmark restore warm-up was interrupted.");
@@ -586,10 +664,18 @@ public final class VietnameseKokoroEngine {
             long started = System.nanoTime();
             SharedPreferences prefs = context.getSharedPreferences(PERF_PREFS, Context.MODE_PRIVATE);
             activeCpuThreads = prefs.getInt(PREF_CPU_THREADS, 0);
-            boolean requestedNnapi = prefs.getBoolean(PREF_NNAPI_ENABLED, false);
-            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads, requestedNnapi);
+            boolean requestedXnnpack = isXnnpackRequested(context);
+            boolean requestedNnapi = !BuildConfig.KOKORO_XNNPACK_AB && !requestedXnnpack
+                    && prefs.getBoolean(PREF_NNAPI_ENABLED, false);
+            modelReady = nativeBridge.createEngine(assets.model.getAbsolutePath(), activeCpuThreads,
+                    requestedNnapi, requestedXnnpack);
             if (!modelReady) throw new IllegalStateException("Vietnamese Kokoro model failed to load.");
+            activeXnnpack = nativeBridge.isXnnpackActive();
             activeNnapi = nativeBridge.isNnapiActive();
+            if (requestedXnnpack && !activeXnnpack) {
+                TtsDiagnostics.warn(context, "provider", "xnnpack_fallback",
+                        "XNNPACK session could not be created; native backend fell back to CPU.");
+            }
             if (requestedNnapi && !activeNnapi) {
                 prefs.edit().putBoolean(PREF_NNAPI_ENABLED, false).apply();
                 TtsDiagnostics.warn(context, "provider", "nnapi_auto_disabled",
@@ -597,7 +683,9 @@ public final class VietnameseKokoroEngine {
             }
             TtsDiagnostics.info(context, "engine", "model_ready",
                     "elapsedMs=" + elapsedMs(started) + ", modelBytes=" + assets.model.length()
-                            + ", provider=" + (activeNnapi ? "NNAPI" : "CPU")
+                            + ", provider=" + activeProviderLabel()
+                            + ", requestedBackend=" + requestedRuntimeBackend(context)
+                            + ", xnnpackRequested=" + requestedXnnpack
                             + ", cpuThreads=" + threadLabel(activeCpuThreads));
         }
     }
@@ -658,11 +746,14 @@ public final class VietnameseKokoroEngine {
                     + ", outputCopyUs=" + nativeTiming[3]
                     + ", nativeTotalUs=" + nativeTiming[4]
                     + ", cpuThreads=" + threadLabel((int) nativeTiming[5]);
+            if (nativeTiming.length >= 7) {
+                nativeProfile += ", xnnpackThreads=" + nativeTiming[6];
+            }
         }
         if (appContext != null) {
             TtsDiagnostics.info(appContext, "profile", "chunk",
                     "purpose=" + purpose + ", voice=" + voice.id + ", provider="
-                            + (activeNnapi ? "NNAPI" : "CPU") + ", textChars=" + text.length()
+                            + activeProviderLabel() + ", textChars=" + text.length()
                             + ", phonemeChars=" + phonemes.length() + ", tokenIds=" + ids.length
                             + ", audioSamples=" + (audio == null ? 0 : audio.length)
                             + ", g2pMs=" + g2pMs + ", tokenizeMs=" + tokenizeMs
