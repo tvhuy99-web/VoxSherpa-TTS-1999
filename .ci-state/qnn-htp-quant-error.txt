@@ -1,10 +1,5 @@
-run_id=32351716528
+run_id=32352691879
 ---- quantizer tail ----
-WARNING:root:Expected bias 'kmodel.decoder.decode.3.norm2.norm.bias' to be an initializer
-WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.0.norm.bias' to be an initializer
-WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.0.norm.bias' to be an initializer
-WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.1.norm.bias' to be an initializer
-WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.1.norm.bias' to be an initializer
 WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.2.norm.bias' to be an initializer
 WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.2.norm.bias' to be an initializer
 WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.0.norm.bias' to be an initializer
@@ -50,6 +45,7 @@ WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.1.norm.b
 WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.2.norm.bias' to be an initializer
 WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.2.norm.bias' to be an initializer
 WARNING:root:Please consider pre-processing before quantization. See https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+[1;31m2026-08-20 09:19:14.930813757 [E:onnxruntime:, sequential_executor.cc:615 ExecuteKernel] Non-zero status code returned while running QLinearConv node. Name:'/F0.1/conv1x1/Conv_token_1257' Status Message: Input channels C is not equal to kernel channels * group. C: 509 kernel channels: 512 group: 1[m
 WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
 WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.embeddings.LayerNorm.weight' with rank 1
 WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
@@ -157,6 +153,10 @@ WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.2.norm.b
 WARNING:root:Quantized bias `kmodel.decoder.generator.noise_res.1.convs2.1.bias` exceeds the range of a int32. The bias scale is too small.
 WARNING:root:Quantized bias `kmodel.decoder.generator.noise_res.1.convs2.2.bias` exceeds the range of a int32. The bias scale is too small.
 WARNING:root:Please consider pre-processing before quantization. See https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
-Candidate u8u8 failed: ValidationError("Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \nname: /SequenceAt OpType: SequenceAt\n is not output of any previous nodes.\n\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop")
-Candidate u16u8 failed: ValidationError("Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \nname: /SequenceAt OpType: SequenceAt\n is not output of any previous nodes.\n\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop")
+[1;31m2026-08-20 09:21:27.830084914 [E:onnxruntime:, sequential_executor.cc:615 ExecuteKernel] Non-zero status code returned while running Mul node. Name:'/decoder/generator/m_source/l_sin_gen/Mul' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/math/element_wise_ops.h:656 onnxruntime::Broadcaster::Broadcaster(gsl::span<const long int>, gsl::span<const long int>) largest <= 1 was false. Can broadcast 0 by 0 or 1. 9 is invalid.
+[m
+TOPOLOGY_REPAIR candidate=u8u8 moved=4038
+Candidate u8u8 failed: Fail("[ONNXRuntimeError] : 1 : FAIL : Non-zero status code returned while running QLinearConv node. Name:'/F0.1/conv1x1/Conv_token_1257' Status Message: Input channels C is not equal to kernel channels * group. C: 509 kernel channels: 512 group: 1")
+TOPOLOGY_REPAIR candidate=u16u8 moved=4038
+Candidate u16u8 failed: RuntimeException("[ONNXRuntimeError] : 6 : RUNTIME_EXCEPTION : Non-zero status code returned while running Mul node. Name:'/decoder/generator/m_source/l_sin_gen/Mul' Status Message: /onnxruntime_src/onnxruntime/core/providers/cpu/math/element_wise_ops.h:656 onnxruntime::Broadcaster::Broadcaster(gsl::span<const long int>, gsl::span<const long int>) largest <= 1 was false. Can broadcast 0 by 0 or 1. 9 is invalid.\n")
 No QNN HTP QDQ candidate met quality/duration gates
