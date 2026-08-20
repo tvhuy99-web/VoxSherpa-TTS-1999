@@ -1,13 +1,162 @@
-run_id=32351236797
+run_id=32351716528
 ---- quantizer tail ----
-[0;93m2026-08-20 08:59:56.945460165 [W:onnxruntime:Default, device_discovery.cc:133 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
-Traceback (most recent call last):
-  File "/home/runner/work/VoxSherpa-TTS-1999/VoxSherpa-TTS-1999/scripts/quantize_kokoro_vi_qnn_htp.py", line 11, in <module>
-    from onnxruntime.quantization import CalibrationDataReader, QuantType, quantize
-  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/__init__.py", line 1, in <module>
-    from .calibrate import (  # noqa: F401
-  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/calibrate.py", line 22, in <module>
-    from .quant_utils import apply_plot, load_model_with_shape_infer, smooth_distribution
-  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/quant_utils.py", line 17, in <module>
-    from ml_dtypes import float8_e4m3fn, int4, uint4
-ModuleNotFoundError: No module named 'ml_dtypes'
+WARNING:root:Expected bias 'kmodel.decoder.decode.3.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.2.norm.bias' to be an initializer
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.decoder.generator.noise_res.1.adain1.0.norm.weight' with rank 1
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.2.norm.bias' to be an initializer
+WARNING:root:Please consider pre-processing before quantization. See https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+WARNING:root:Please consider to run pre-processing before quantization. Refer to example: https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.embeddings.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.attention.LayerNorm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.bert.encoder.albert_layer_groups.0.albert_layers.0.full_layer_layer_norm.weight' with rank 1
+WARNING:root:Expected bias '/text_encoder/lstms.1/Constant_8_output_0' to be an initializer
+WARNING:root:Expected bias '/text_encoder/lstms.3/Constant_8_output_0' to be an initializer
+WARNING:root:Expected bias '/text_encoder/lstms.5/Constant_8_output_0' to be an initializer
+WARNING:root:failed to infer the type of tensor: . Skip to quantize it. Please check if it is expected.
+WARNING:root:failed to infer the type of tensor: . Skip to quantize it. Please check if it is expected.
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.predictor.F0.0.norm1.norm.weight' with rank 1
+WARNING:root:Expected bias 'kmodel.predictor.F0.0.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.F0.1.norm1.norm.bias' to be an initializer
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.predictor.F0.1.norm2.norm.weight' with rank 1
+WARNING:root:Expected bias 'kmodel.predictor.F0.2.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.F0.2.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.0.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.0.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.1.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.1.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.2.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.predictor.N.2.norm2.norm.bias' to be an initializer
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.text_encoder.cnn.0.1.gamma' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.text_encoder.cnn.1.1.gamma' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.text_encoder.cnn.2.1.gamma' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.decoder.encode.norm1.norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.decoder.encode.norm2.norm.weight' with rank 1
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.decoder.decode.0.norm1.norm.weight' with rank 1
+WARNING:root:Expected bias 'kmodel.decoder.decode.0.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.1.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.1.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.2.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.2.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.3.norm1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.decode.3.norm2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.0.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.0.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.1.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.2.adain2.2.norm.bias' to be an initializer
+WARNING:root:Axis 1 is out-of-range for weight 'kmodel.decoder.generator.noise_res.1.adain1.0.norm.weight' with rank 1
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.noise_res.1.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.3.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.4.adain2.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.0.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.1.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain1.2.norm.bias' to be an initializer
+WARNING:root:Expected bias 'kmodel.decoder.generator.resblocks.5.adain2.2.norm.bias' to be an initializer
+WARNING:root:Quantized bias `kmodel.decoder.generator.noise_res.1.convs2.1.bias` exceeds the range of a int32. The bias scale is too small.
+WARNING:root:Quantized bias `kmodel.decoder.generator.noise_res.1.convs2.2.bias` exceeds the range of a int32. The bias scale is too small.
+WARNING:root:Please consider pre-processing before quantization. See https://github.com/microsoft/onnxruntime-inference-examples/blob/main/quantization/image_classification/cpu/ReadMe.md 
+Candidate u8u8 failed: ValidationError("Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \nname: /SequenceAt OpType: SequenceAt\n is not output of any previous nodes.\n\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop")
+Candidate u16u8 failed: ValidationError("Nodes in a graph must be topologically sorted, however input '/SplitToSequence_output_0' of node: \nname: /SequenceAt OpType: SequenceAt\n is not output of any previous nodes.\n\n==> Context: Bad node spec for node. Name: /Loop OpType: Loop")
+No QNN HTP QDQ candidate met quality/duration gates
