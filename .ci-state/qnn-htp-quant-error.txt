@@ -1,0 +1,13 @@
+run_id=32351236797
+---- quantizer tail ----
+[0;93m2026-08-20 08:59:56.945460165 [W:onnxruntime:Default, device_discovery.cc:133 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+Traceback (most recent call last):
+  File "/home/runner/work/VoxSherpa-TTS-1999/VoxSherpa-TTS-1999/scripts/quantize_kokoro_vi_qnn_htp.py", line 11, in <module>
+    from onnxruntime.quantization import CalibrationDataReader, QuantType, quantize
+  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/__init__.py", line 1, in <module>
+    from .calibrate import (  # noqa: F401
+  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/calibrate.py", line 22, in <module>
+    from .quant_utils import apply_plot, load_model_with_shape_infer, smooth_distribution
+  File "/opt/hostedtoolcache/Python/3.11.15/x64/lib/python3.11/site-packages/onnxruntime/quantization/quant_utils.py", line 17, in <module>
+    from ml_dtypes import float8_e4m3fn, int4, uint4
+ModuleNotFoundError: No module named 'ml_dtypes'
