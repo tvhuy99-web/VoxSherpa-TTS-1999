@@ -36,8 +36,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- .ci-state/selective-int8-run.txt
-          git commit -m "Record active selective INT8 run ${GITHUB_RUN_ID}"
-          git push origin HEAD:agent/selective-int8-experiment
+          if ! git diff --cached --quiet; then
+            git commit -m "Record active selective INT8 run ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -102,11 +104,48 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- .ci-state/selective-int8-quantizer-error.txt
-          git commit -m "Record selective INT8 quantizer failure ${GITHUB_RUN_ID}"
-          git push origin HEAD:agent/selective-int8-experiment
+          if ! git diff --cached --quiet; then
+            git commit -m "Record selective INT8 quantizer failure ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
+
+      - name: Record duration-safe quantization report
+        if: steps.quantize.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp app/src/main/assets/kokoro_vi/int8_quantization_report.json .ci-state/selective-int8-quantization-report.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/selective-int8-quantization-report.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record duration-safe selective INT8 report ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
+
+      - name: Harden integration patch anchors
+        run: python3 ./scripts/fix_selective_int8_patch_anchors.py
 
       - name: Apply selective INT8 A-B-C experiment
-        run: python3 ./scripts/apply_selective_int8_experiment.py
+        id: apply_patch
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 ./scripts/apply_selective_int8_experiment.py 2>&1 | tee .ci-state/selective-int8-patch.log
+
+      - name: Record integration patch failure
+        if: failure() && steps.apply_patch.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tail -n 120 .ci-state/selective-int8-patch.log > .ci-state/selective-int8-patch-error.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/selective-int8-patch-error.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Record selective INT8 integration failure ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
 
       - name: Show quantization report
         run: cat app/src/main/assets/kokoro_vi/int8_quantization_report.json
@@ -114,7 +153,7 @@ jobs:
       - name: Build selective INT8 APK
         env:
           VOX_VERSION_NAME: '4.1.6-selective-int8-abc'
-          VOX_VERSION_CODE: '200201'
+          VOX_VERSION_CODE: '200202'
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
@@ -163,5 +202,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- .ci-state/selective-int8-run.txt
-          git commit -m "Record selective INT8 artifact run ${GITHUB_RUN_ID}"
-          git push origin HEAD:agent/selective-int8-experiment
+          if ! git diff --cached --quiet; then
+            git commit -m "Record selective INT8 artifact run ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
