@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import onnx
 import onnxruntime as ort
+from onnx import AttributeProto
 from onnxruntime.quantization import CalibrationDataReader, QuantType, quantize
 from onnxruntime.quantization.execution_providers.qnn import get_qnn_qdq_config, qnn_preprocess_model
 
@@ -109,15 +110,102 @@ def evaluate(model: Path) -> dict:
 
 
 def accepted(q: dict, activation: str) -> bool:
-    # U16 fallback is allowed slightly tighter duration but same waveform gate.
     return (q["durationExactAll"] and q["minCorrelation"] >= 0.985
             and q["minSnrDb"] >= 16.0 and q["maxNormalizedRmse"] <= 0.16)
+
+
+def _subgraphs(node):
+    for attr in node.attribute:
+        if attr.type == AttributeProto.GRAPH:
+            yield attr.g
+        elif attr.type == AttributeProto.GRAPHS:
+            yield from attr.graphs
+
+
+def _free_refs(graph) -> set[str]:
+    """Names consumed from an enclosing lexical scope, including nested subgraphs."""
+    local_defs = {x.name for x in graph.input}
+    local_defs.update(x.name for x in graph.initializer)
+    local_defs.update(out for node in graph.node for out in node.output if out)
+
+    used: set[str] = set()
+    for node in graph.node:
+        used.update(x for x in node.input if x)
+        for sg in _subgraphs(node):
+            used.update(_free_refs(sg))
+    return used - local_defs
+
+
+def _sort_graph(graph, path: str) -> int:
+    """Stable topological sort that accounts for ONNX control-flow lexical captures."""
+    moved = 0
+    for i, node in enumerate(graph.node):
+        for j, sg in enumerate(_subgraphs(node)):
+            moved += _sort_graph(sg, f"{path}/{node.name or node.op_type}:subgraph{j}")
+
+    nodes = list(graph.node)
+    if len(nodes) < 2:
+        return moved
+
+    producer: dict[str, int] = {}
+    for i, node in enumerate(nodes):
+        for out in node.output:
+            if out:
+                producer[out] = i
+
+    deps: list[set[int]] = []
+    reverse: list[set[int]] = [set() for _ in nodes]
+    for i, node in enumerate(nodes):
+        names = {x for x in node.input if x}
+        for sg in _subgraphs(node):
+            names.update(_free_refs(sg))
+        d = {producer[name] for name in names if name in producer and producer[name] != i}
+        deps.append(d)
+        for p in d:
+            reverse[p].add(i)
+
+    ready = [i for i, d in enumerate(deps) if not d]
+    ready.sort()
+    order: list[int] = []
+    while ready:
+        i = ready.pop(0)
+        order.append(i)
+        for consumer in sorted(reverse[i]):
+            if i in deps[consumer]:
+                deps[consumer].remove(i)
+                if not deps[consumer] and consumer not in order and consumer not in ready:
+                    ready.append(consumer)
+        ready.sort()
+
+    if len(order) != len(nodes):
+        unresolved = [nodes[i].name or nodes[i].op_type for i, d in enumerate(deps) if d]
+        raise RuntimeError(f"Topological repair found a dependency cycle in {path}: {unresolved[:12]}")
+
+    if order != list(range(len(nodes))):
+        sorted_nodes = [nodes[i] for i in order]
+        del graph.node[:]
+        graph.node.extend(sorted_nodes)
+        moved += sum(1 for new_i, old_i in enumerate(order) if new_i != old_i)
+    return moved
+
+
+def repair_quantized_topology(model_path: Path) -> int:
+    """Repair quantizer ordering around Loop/SequenceAt without changing graph semantics."""
+    model = onnx.load(str(model_path), load_external_data=True)
+    moved = _sort_graph(model.graph, "graph")
+    onnx.save_model(model, str(model_path))
+    # The checker stays mandatory: repair is accepted only if the resulting model is valid.
+    onnx.checker.check_model(onnx.load(str(model_path), load_external_data=True), full_check=True)
+    return moved
 
 
 def build_candidate(name: str, activation_type: QuantType) -> tuple[Path, dict]:
     pre = WORK / f"kokoro.{name}.pre.onnx"
     changed = qnn_preprocess_model(str(FP32), str(pre))
     source = pre if changed else FP32
+    # Validate the source independently so a preprocessing regression is never hidden.
+    onnx.checker.check_model(onnx.load(str(source), load_external_data=True))
+
     dst = WORK / f"kokoro.{name}.qdq.onnx"
     reader = Reader()
     cfg = get_qnn_qdq_config(
@@ -129,10 +217,13 @@ def build_candidate(name: str, activation_type: QuantType) -> tuple[Path, dict]:
         weight_symmetric=False,
     )
     quantize(str(source), str(dst), cfg)
-    onnx.checker.check_model(onnx.load(str(dst), load_external_data=True))
+    moved = repair_quantized_topology(dst)
+    print(f"TOPOLOGY_REPAIR candidate={name} moved={moved}")
+
     q = evaluate(dst)
     q["bytes"] = dst.stat().st_size
     q["activationType"] = name
+    q["topologyNodesMoved"] = moved
     return dst, q
 
 
