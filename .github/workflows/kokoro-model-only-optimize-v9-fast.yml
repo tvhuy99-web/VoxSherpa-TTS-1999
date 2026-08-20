@@ -1,0 +1,81 @@
+name: Kokoro model-only fast QLinearConv optimization v9
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/selective-int8-experiment]
+    paths:
+      - scripts/run_folded_qlinearconv_v9_fast.py
+      - .github/workflows/kokoro-model-only-optimize-v9-fast.yml
+
+permissions:
+  contents: write
+concurrency:
+  group: kokoro-model-only-v9-fast-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Record active run
+        run: |
+          mkdir -p .ci-state
+          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/aggressive-model-v9-fast-run.txt
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/aggressive-model-v9-fast-run.txt; git commit -m "Record active model v9 fast run ${GITHUB_RUN_ID}"; git push origin HEAD:agent/selective-int8-experiment
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install dependencies
+        run: python -m pip install 'numpy==1.26.4' 'onnx==1.15.0' 'onnxruntime==1.17.1' && python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Download original model and voice
+        run: |
+          mkdir -p app/src/main/assets/kokoro_vi/voicepacks build/model-only-source
+          curl --fail --location --retry 4 --retry-delay 3 -o app/src/main/assets/kokoro_vi/kokoro_vi.onnx 'https://huggingface.co/contextboxai/Kokoro-Vietnamese/resolve/9f210d622209fcc216fe2ac6159fed2ff381cb8a/kokoro_vi.onnx?download=true'
+          curl --fail --location --retry 4 --retry-delay 3 -o build/model-only-source/diem_trinh.pt 'https://huggingface.co/contextboxai/Kokoro-Vietnamese/resolve/9f210d622209fcc216fe2ac6159fed2ff381cb8a/voicepacks/diem_trinh.pt?download=true'
+          python tools/kokoro_vi/convert_voicepack.py build/model-only-source/diem_trinh.pt app/src/main/assets/kokoro_vi/voicepacks/diem_trinh.f32le
+      - name: Optimize one material Conv candidate
+        id: optimize
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .ci-state
+          python scripts/run_folded_qlinearconv_v9_fast.py 2>&1 | tee .ci-state/aggressive-model-v9-fast.log
+      - name: Record result
+        if: always()
+        run: |
+          if [[ -s build/model-only-output/optimization_report.json ]]; then cp build/model-only-output/optimization_report.json .ci-state/aggressive-model-v9-fast-report.json; else python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('.ci-state/aggressive-model-v9-fast.log'); tail=p.read_text(errors='replace').splitlines()[-320:] if p.exists() else ['no log']
+          Path('.ci-state/aggressive-model-v9-fast-report.json').write_text(json.dumps({'status':'failed_before_report','logTail':tail},ensure_ascii=False,indent=2)+'\n')
+          PY
+          fi
+          printf 'run_id=%s\nstatus=%s\n' "$GITHUB_RUN_ID" "${{ steps.optimize.outcome }}" > .ci-state/aggressive-model-v9-fast-run.txt
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .ci-state/aggressive-model-v9-fast-report.json .ci-state/aggressive-model-v9-fast-run.txt; git commit -m "Record model v9 fast result ${GITHUB_RUN_ID}"; git push origin HEAD:agent/selective-int8-experiment
+      - name: Verify accepted model
+        if: steps.optimize.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('build/model-only-output/optimization_report.json').read_text())
+          assert r['status']=='accepted_material_optimization'
+          assert r['sizeReductionPercent']>=25.0
+          q=r['selectedCandidate']['quality']; assert q['durationExactAll']; assert q['minCorrelation']>=0.985; assert q['minSnrDb']>=16.0; assert q['maxNormalizedRmse']<=0.16
+          print('bytes',r['optimizedBytes']); print('reduction',r['sizeReductionPercent']); print('sha256',r['sha256']); print('selectedConvCount',r['selectedCandidate']['selectedConvCount']); print('quality',q)
+          PY
+      - name: Upload model only
+        if: steps.optimize.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-Kokoro-Optimized-Model-Only-v9-fast
+          path: |
+            build/model-only-output/kokoro_vi.onnx
+            build/model-only-output/optimization_report.json
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
