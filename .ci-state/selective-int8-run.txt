@@ -1,4 +1,4 @@
-run_id=32325749284
-head_sha=44d0a6962fe9ba09847fc4eb2365a48e44b9f68f
+run_id=32326077574
+head_sha=15f5d9d675e9e8e642d06dce9b847264091a8976
 status=running
 artifact=VoxSherpa-Kokoro-Vietnamese-SELECTIVE-INT8-ABC
