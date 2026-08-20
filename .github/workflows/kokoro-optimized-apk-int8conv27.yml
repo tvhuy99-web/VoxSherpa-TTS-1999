@@ -1,0 +1,142 @@
+name: Kokoro optimized INT8Conv27 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/selective-int8-experiment]
+    paths:
+      - .github/workflows/kokoro-optimized-apk-int8conv27.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kokoro-optimized-apk-int8conv27-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      VOX_VERSION_NAME: 4.1.3-int8conv27
+      EXPECTED_MODEL_SHA256: 710fdf46ce61f6fb149ef6c7354832359a2d973eed03cba99f5d860fc9f1907d
+      EXPECTED_MODEL_BYTES: '237564533'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install model and voice dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy==1.26.4' 'onnx==1.15.0' 'onnxruntime==1.17.1'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust Android targets and cargo-ndk
+        run: |
+          rustup target add aarch64-linux-android x86_64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Prepare production Kokoro assets and ORT 1.17.1 runtime
+        env:
+          ORT_VERSION: '1.17.1'
+        run: ./scripts/prepare_kokoro_vi_stage1.sh
+
+      - name: Reproduce accepted optimized model
+        run: python scripts/run_folded_qlinearconv_v10_release.py
+
+      - name: Install optimized model into app assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL=build/model-only-output/kokoro_vi.onnx
+          test -s "$MODEL"
+          bytes=$(wc -c < "$MODEL")
+          sha=$(sha256sum "$MODEL" | awk '{print $1}')
+          echo "optimized_model_bytes=$bytes"
+          echo "optimized_model_sha256=$sha"
+          test "$bytes" = "$EXPECTED_MODEL_BYTES"
+          test "$sha" = "$EXPECTED_MODEL_SHA256"
+          cp "$MODEL" app/src/main/assets/kokoro_vi/kokoro_vi.onnx
+
+      - name: Restrict APK to ARM64 only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          old="abiFilters 'arm64-v8a', 'x86_64'"
+          assert old in s
+          p.write_text(s.replace(old,"abiFilters 'arm64-v8a'",1))
+          PY
+
+      - name: Build optimized release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean assembleRelease -PkokoroViStage1=true --no-daemon -x test -x lint
+
+      - name: Verify optimized model and ARM64 runtime inside APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          echo "APK=$APK"
+          apk_model_bytes=$(unzip -l "$APK" | awk '$4=="assets/kokoro_vi/kokoro_vi.onnx" {print $1}')
+          echo "apk_model_bytes=$apk_model_bytes"
+          test "$apk_model_bytes" = "$EXPECTED_MODEL_BYTES"
+          apk_model_sha=$(unzip -p "$APK" assets/kokoro_vi/kokoro_vi.onnx | sha256sum | awk '{print $1}')
+          echo "apk_model_sha256=$apk_model_sha"
+          test "$apk_model_sha" = "$EXPECTED_MODEL_SHA256"
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libonnxruntime.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libsea_g2p_android.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so'
+          if unzip -l "$APK" | grep -F 'lib/x86_64/'; then
+            echo 'ERROR: x86_64 native libraries unexpectedly packaged' >&2
+            exit 1
+          fi
+          voices=(diem_trinh hung_thinh mai_linh mai_loan manh_dung my_yen ngoc_huyen phat_tai thanh_dat thuc_trinh tuan_ngoc storyvert duc_an duc_duy)
+          for voice in "${voices[@]}"; do
+            unzip -l "$APK" | grep -F "assets/kokoro_vi/voicepacks/${voice}.f32le"
+          done
+          count=$(unzip -l "$APK" | grep -c 'assets/kokoro_vi/voicepacks/.*\.f32le')
+          test "$count" -eq 14
+          mkdir -p "$RUNNER_TEMP/apk-check"
+          unzip -q "$APK" 'lib/arm64-v8a/libvoxsherpa_kokoro_vi.so' -d "$RUNNER_TEMP/apk-check"
+          needed=$(readelf -d "$RUNNER_TEMP/apk-check/lib/arm64-v8a/libvoxsherpa_kokoro_vi.so")
+          echo "$needed" | grep -F 'Shared library: [libsea_g2p_android.so]'
+          echo "$needed" | grep -F 'Shared library: [libonnxruntime.so]'
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload optimized APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxSherpa-4.1.3-INT8Conv27-ARM64
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
