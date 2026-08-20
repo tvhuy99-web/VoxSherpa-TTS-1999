@@ -1,4 +1,4 @@
-name: Export QNN HTP APK in parts
+name: Export signed QNN HTP APK in parts
 
 on:
   push:
@@ -17,6 +17,8 @@ jobs:
     env:
       SOURCE_RUN_ID: '32353974283'
       SOURCE_ARTIFACT: 'VoxSherpa-Kokoro-ORT-1.26-QNN-HTP-AB'
+      STOREPASS: 'VoxSherpaQnnHtpTest2026'
+      ALIAS: 'voxsherpa-qnn-htp-test'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,13 +28,29 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .ci-state
-          printf 'run_id=%s\nstatus=running\n' "$GITHUB_RUN_ID" > .ci-state/qnn-htp-export-run.txt
+          printf 'run_id=%s\nstatus=running-signed-export\n' "$GITHUB_RUN_ID" > .ci-state/qnn-htp-export-run.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- .ci-state/qnn-htp-export-run.txt
-          git commit -m "Record QNN HTP export run $GITHUB_RUN_ID" || true
+          git commit -m "Record signed QNN HTP export run $GITHUB_RUN_ID" || true
           git pull --rebase origin "$GITHUB_REF_NAME" || true
           git push origin HEAD:"$GITHUB_REF_NAME"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Android SDK and signing tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'build-tools;35.0.0'
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
       - name: Download verified A/B artifact
         uses: actions/download-artifact@v4
@@ -43,13 +61,38 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ env.SOURCE_RUN_ID }}
 
-      - name: Split exact APK into four parts
+      - name: Zipalign and sign installable test APK
         shell: bash
         run: |
           set -euo pipefail
           APK=$(find source -name '*.apk' -type f | head -n 1)
           test -n "$APK"
-          mkdir -p export
+          mkdir -p signed export
+          keytool -genkeypair -v \
+            -keystore signed/qnn-htp-test.jks \
+            -storepass "$STOREPASS" -keypass "$STOREPASS" \
+            -alias "$ALIAS" -keyalg RSA -keysize 3072 -validity 3650 \
+            -dname 'CN=VoxSherpa QNN HTP Test,OU=Experimental,O=VoxSherpa,L=Test,ST=Test,C=VN'
+          zipalign -f -p 4 "$APK" signed/VoxSherpa-4.1.4-QNN-HTP-AB-aligned.apk
+          apksigner sign \
+            --ks signed/qnn-htp-test.jks \
+            --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$STOREPASS" \
+            --key-pass "pass:$STOREPASS" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out signed/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk \
+            signed/VoxSherpa-4.1.4-QNN-HTP-AB-aligned.apk
+          apksigner verify --verbose --print-certs signed/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk
+          zipalign -c -p 4 signed/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk
+          sha256sum signed/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk
+
+      - name: Split signed APK into four parts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=signed/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk
           python - "$APK" <<'PY'
           import hashlib, json, math, sys
           from pathlib import Path
@@ -65,7 +108,7 @@ jobs:
                   if not payload:
                       raise SystemExit(f'missing payload for part {i}')
                   sha.update(payload)
-                  p = Path('export') / f'VoxSherpa-4.1.4-QNN-HTP-AB.apk.part{i:02d}'
+                  p = Path('export') / f'VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk.part{i:02d}'
                   p.write_bytes(payload)
                   part_meta.append({
                       'name': p.name,
@@ -76,6 +119,7 @@ jobs:
                   raise SystemExit('split did not consume the full APK')
           manifest = {
               'sourceRunId': 32353974283,
+              'signed': True,
               'apkName': src.name,
               'apkBytes': data_size,
               'apkSha256': sha.hexdigest(),
@@ -85,36 +129,36 @@ jobs:
           print(json.dumps(manifest, indent=2))
           PY
 
-      - name: Upload part 00
+      - name: Upload signed part 00
         uses: actions/upload-artifact@v4
         with:
-          name: QNN-HTP-APK-part00
-          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part00
+          name: QNN-HTP-SIGNED-APK-part00
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk.part00
           compression-level: 0
           retention-days: 7
 
-      - name: Upload part 01
+      - name: Upload signed part 01
         uses: actions/upload-artifact@v4
         with:
-          name: QNN-HTP-APK-part01
-          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part01
+          name: QNN-HTP-SIGNED-APK-part01
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk.part01
           compression-level: 0
           retention-days: 7
 
-      - name: Upload part 02
+      - name: Upload signed part 02
         uses: actions/upload-artifact@v4
         with:
-          name: QNN-HTP-APK-part02
-          path: export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part02
+          name: QNN-HTP-SIGNED-APK-part02
+          path: export/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk.part02
           compression-level: 0
           retention-days: 7
 
-      - name: Upload part 03 and manifest
+      - name: Upload signed part 03 and manifest
         uses: actions/upload-artifact@v4
         with:
-          name: QNN-HTP-APK-part03
+          name: QNN-HTP-SIGNED-APK-part03
           path: |
-            export/VoxSherpa-4.1.4-QNN-HTP-AB.apk.part03
+            export/VoxSherpa-4.1.4-QNN-HTP-AB-signed.apk.part03
             export/manifest.json
           compression-level: 0
           retention-days: 7
