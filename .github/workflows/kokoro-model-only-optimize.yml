@@ -28,6 +28,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Record active run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-state
+          printf 'run_id=%s\nhead_sha=%s\noptimizer_outcome=running\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_SHA" > .ci-state/aggressive-model-run.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- .ci-state/aggressive-model-run.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Record active aggressive model run ${GITHUB_RUN_ID}"
+            git push origin HEAD:agent/selective-int8-experiment
+          fi
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
